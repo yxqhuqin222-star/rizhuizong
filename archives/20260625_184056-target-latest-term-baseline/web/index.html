@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>进度监控</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="mark">日</div>
+        <div>
+          <h1>日追踪看板</h1>
+          <p>Summary Monitor · V1</p>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="active" href="#overview">总览</a>
+        <a href="#summary">最新期次明细</a>
+        <a href="#export">导出</a>
+      </nav>
+
+      <div class="section">
+        <h2>数据更新</h2>
+        <div class="upload primary">
+          <strong>demo 数据</strong>
+          <div class="meta" id="demoInfo">读取中...</div>
+          <input id="demoFile" type="file" accept=".xlsx,.xls" hidden>
+          <button class="btn block primary" id="demoUploadButton">上传今日 demo</button>
+        </div>
+        <div class="upload">
+          <strong>target 目标</strong>
+          <div class="meta" id="targetInfo">读取中...</div>
+          <input id="targetFile" type="file" accept=".xlsx,.xls" hidden>
+          <button class="btn block" id="targetUploadButton">更新 target</button>
+        </div>
+        <small>上传后自动校验字段并重算 summary；看板默认切到每个学部的最新期次。</small>
+      </div>
+
+      <div class="section" id="export">
+        <h2>导出</h2>
+        <button class="btn block" id="exportLatest">导出最新期次</button>
+        <button class="btn block" id="exportAll">导出完整 Summary</button>
+        <button class="btn block" id="exportQuery">导出查询明细</button>
+        <button class="btn block" id="naturalQueryButton">自然语言查询</button>
+        <button class="btn block" id="reportPrimary">下载小学播报图</button>
+        <button class="btn block" id="reportMiddle">下载初中播报图</button>
+        <button class="btn block" id="reportHigh">下载高中播报图</button>
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar" id="overview">
+        <div class="title">
+          <h1>进度监控</h1>
+        </div>
+        <div class="actions">
+          <button class="btn" id="showAllButton">查看全部期次</button>
+          <button class="btn" id="downloadWorkbook">导出 Excel</button>
+          <button class="btn primary" id="refreshButton">重新生成 Summary</button>
+        </div>
+      </div>
+
+      <section class="cards">
+        <div class="card">
+          <div class="label">最新期次目标</div>
+          <div class="value" id="metricTarget">-</div>
+          <div class="hint">默认范围合计</div>
+        </div>
+        <div class="card">
+          <div class="label">最新期次现状</div>
+          <div class="value" id="metricCurrent">-</div>
+          <div class="hint">默认范围成单量</div>
+        </div>
+        <div class="card">
+          <div class="label">最新期次完成率</div>
+          <div class="value red" id="metricCompletion">-</div>
+          <div class="hint">现状 / 目标</div>
+        </div>
+        <div class="card">
+          <div class="label">平均进度</div>
+          <div class="value" id="metricProgress">-</div>
+          <div class="hint">最新期次可计算项</div>
+        </div>
+        <div class="card">
+          <div class="label">最新期次落后项</div>
+          <div class="value red" id="metricBehind">-</div>
+          <div class="hint">完成率低于进度</div>
+        </div>
+      </section>
+
+      <section class="panel" id="summary">
+        <div class="panel-head">
+          <h2 id="tableTitle">最新期次明细</h2>
+          <div class="actions">
+            <button class="btn" id="toggleScopeButton">切换到全部期次</button>
+            <button class="btn" id="exportCurrent">导出当前视图</button>
+          </div>
+        </div>
+
+        <div class="filters">
+          <div class="field">
+            <label>学部</label>
+            <select id="filterDepartment"></select>
+          </div>
+          <div class="field">
+            <label>期次</label>
+            <select id="filterTerm"></select>
+          </div>
+          <div class="field">
+            <label>渠道二级分类</label>
+            <select id="filterChannel"></select>
+          </div>
+          <div class="field">
+            <label>价体</label>
+            <select id="filterPayment"></select>
+          </div>
+          <div class="field">
+            <label>关键词</label>
+            <input id="filterKeyword" placeholder="年级 / 渠道 / 期次">
+          </div>
+        </div>
+
+        <div class="chips">
+          <button class="chip active" data-chip="all" id="chipAll">最新期次</button>
+          <button class="chip" data-chip="behind" id="chipBehind">落后进度</button>
+          <button class="chip" data-chip="no-current">未开单</button>
+          <button class="chip" data-chip="done">已完成目标</button>
+          <button class="chip" data-chip="history">仅看历史期次</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>学部</th>
+                <th>期次</th>
+                <th>渠道</th>
+                <th class="num">价体</th>
+                <th>年级</th>
+                <th>target_time</th>
+                <th class="num">目标</th>
+                <th class="num">现状</th>
+                <th class="num">差距</th>
+                <th class="num">完成率</th>
+                <th class="num">进度</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+[
+  {
+    "dept": "小学",
+    "term": "暑_8",
+    "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.html",
+    "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.png",
+    "summary": {
+      "目标": "12100",
+      "成单量": "1749",
+      "完成率": "0.14454545454545453",
+      "平均进度": "1.0"
+    }
+  },
+  {
+    "dept": "初中",
+    "term": "暑_10",
+    "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.html",
+    "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.png",
+    "summary": {
+      "目标": "9250",
+      "成单量": "1874",
+      "完成率": "0.20259459459459458",
+      "平均进度": "0.05555555555555555"
+    }
+  },
+  {
+    "dept": "高中",
+    "term": "暑_10",
+    "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.html",
+    "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.png",
+    "summary": {
+      "目标": "7080",
+      "成单量": "5809",
+      "完成率": "0.8204802259887005",
+      "平均进度": "0.6862745098039217"
+    }
+  }
+]

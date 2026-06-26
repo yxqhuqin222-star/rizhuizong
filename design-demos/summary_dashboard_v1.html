@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>日追踪数据看板 · V1 原型</title>
+  <style>
+    /*
+      Assumptions:
+      - 第一版是本地工具型页面：每天上传 demo，target 可沿用或更新。
+      - 本页是高保真设计图，不接真实上传后台；所有数字来自当前 summary/demo 文件。
+      - 风格偏简单：高信息密度、弱装饰、清晰筛选和导出入口。
+    */
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #6f7a86;
+      --line: #dfe5ec;
+      --soft: #eef2f6;
+      --blue: #2454a6;
+      --blue-weak: #e9f0ff;
+      --green: #2d7d55;
+      --amber: #a86b13;
+      --red: #b5433b;
+      --shadow: 0 12px 32px rgba(23, 32, 42, 0.07);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr);
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: #fbfcfe;
+      padding: 22px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }
+
+    main {
+      padding: 24px 28px 40px;
+      min-width: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: #18375f;
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .brand p, .section small {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section {
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: #354250;
+    }
+
+    .upload {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .upload strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .upload .meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .upload.primary {
+      border-color: #b9c9e6;
+      background: #f7faff;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 7px;
+      min-height: 34px;
+      padding: 0 12px;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      background: var(--blue);
+      color: white;
+      border-color: var(--blue);
+    }
+
+    .btn.block {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: #354250;
+      padding: 9px 10px;
+      border-radius: 7px;
+      font-size: 13px;
+    }
+
+    .nav a.active {
+      background: #e8edf4;
+      color: #132c4c;
+      font-weight: 700;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    .title p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      padding: 14px 14px 12px;
+      min-height: 94px;
+    }
+
+    .card .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .card .value {
+      margin-top: 8px;
+      font-size: 25px;
+      font-weight: 760;
+      line-height: 1;
+    }
+
+    .card .hint {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .scope {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 7px 10px;
+      border: 1px solid #c8d5e8;
+      background: #f8fbff;
+      color: #314863;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .value.red { color: var(--red); }
+    .value.green { color: var(--green); }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .notice {
+      margin-bottom: 14px;
+      border: 1px solid #cbd8ea;
+      background: #f8fbff;
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: #314863;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .notice strong {
+      color: #18375f;
+    }
+
+    .panel {
+      overflow: hidden;
+    }
+
+    .panel-head {
+      min-height: 52px;
+      border-bottom: 1px solid var(--line);
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 5px;
+    }
+
+    .field select, .field input {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 7px;
+      height: 34px;
+      padding: 0 9px;
+      color: #233140;
+    }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      padding: 12px 14px 0;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #334253;
+    }
+
+    .chip.active {
+      border-color: #adc1e8;
+      background: var(--blue-weak);
+      color: #183c78;
+      font-weight: 700;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    th {
+      text-align: left;
+      color: #596879;
+      font-weight: 700;
+      background: #fbfcfe;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 10px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    td {
+      border-bottom: 1px solid #edf1f5;
+      padding: 10px;
+      color: #22303f;
+    }
+
+    td.num, th.num {
+      text-align: right;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 496px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: #f4f6f8;
+      color: #526171;
+    }
+
+    .status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #98a4b3;
+    }
+
+    .status.late {
+      background: #fff4ec;
+      color: var(--amber);
+    }
+
+    .status.late::before { background: var(--amber); }
+
+    .query-box {
+      padding: 14px;
+    }
+
+    .query-collapsible {
+      margin-top: 14px;
+    }
+
+    .query-summary {
+      list-style: none;
+      min-height: 58px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .query-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .query-summary h2 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .query-summary p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .query-collapsible:not([open]) .query-box {
+      display: none;
+    }
+
+    .query-box textarea {
+      width: 100%;
+      min-height: 86px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      line-height: 1.55;
+      color: #213142;
+    }
+
+    .answer {
+      margin-top: 12px;
+      border: 1px solid #cad7ed;
+      background: #f7faff;
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .answer .big {
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 800;
+      color: #17365d;
+      margin: 8px 0;
+    }
+
+    .answer p {
+      margin: 0;
+      font-size: 12px;
+      color: #516174;
+      line-height: 1.6;
+    }
+
+    .detail {
+      margin-top: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 13px;
+    }
+
+    .mini-table td, .mini-table th {
+      padding: 8px 6px;
+    }
+
+    .empty-note {
+      padding: 10px 14px 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 1180px) {
+      .app { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; }
+      .workspace { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .filters { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="mark">日</div>
+        <div>
+          <h1>日追踪看板</h1>
+          <p>Summary Monitor · V1</p>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="active" href="#overview">总览</a>
+        <a href="#summary">最新期次明细</a>
+        <a href="#export">导出</a>
+      </nav>
+
+      <div class="section">
+        <h2>数据更新</h2>
+        <div class="upload primary">
+          <strong>demo 数据</strong>
+          <div class="meta">当前：tongji_demo.xlsx<br>最近下单日期：2026-06-23</div>
+          <button class="btn block primary">上传今日 demo</button>
+        </div>
+        <div class="upload">
+          <strong>target 目标</strong>
+          <div class="meta">当前：tongji_target.xlsx<br>本周目标合计：19,730</div>
+          <button class="btn block">更新 target</button>
+        </div>
+        <small>上传后自动校验字段，重算 summary；看板默认切到每个学部的最新期次，历史期次通过筛选查看。</small>
+      </div>
+
+      <div class="section" id="export">
+        <h2>导出</h2>
+        <button class="btn block">导出最新期次</button>
+        <button class="btn block">导出完整 Summary</button>
+        <button class="btn block">导出查询明细</button>
+        <button class="btn block">自然语言查询</button>
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar" id="overview">
+        <div class="title">
+          <h1>进度监控</h1>
+        </div>
+        <div class="actions">
+          <button class="btn">查看全部期次</button>
+          <button class="btn">查看计算口径</button>
+          <button class="btn primary">重新生成 Summary</button>
+        </div>
+      </div>
+
+      <section class="cards">
+        <div class="card">
+          <div class="label">最新期次目标</div>
+          <div class="value">16,330</div>
+          <div class="hint">默认范围合计</div>
+        </div>
+        <div class="card">
+          <div class="label">最新期次现状</div>
+          <div class="value">1,064</div>
+          <div class="hint">默认范围成单量</div>
+        </div>
+        <div class="card">
+          <div class="label">最新期次完成率</div>
+          <div class="value red">6.5%</div>
+          <div class="hint">现状 / 目标</div>
+        </div>
+        <div class="card">
+          <div class="label">平均进度</div>
+          <div class="value">70.0%</div>
+          <div class="hint">最新期次可计算项</div>
+        </div>
+        <div class="card">
+          <div class="label">最新期次落后项</div>
+          <div class="value red">10</div>
+          <div class="hint">完成率低于进度</div>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <section class="panel" id="summary">
+          <div class="panel-head">
+            <h2>最新期次明细</h2>
+            <div class="actions">
+              <button class="btn">切换到全部期次</button>
+              <button class="btn">导出当前视图</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <div class="field">
+              <label>学部</label>
+              <select><option>全部</option><option>初中</option><option>小学</option><option>高中</option></select>
+            </div>
+            <div class="field">
+              <label>期次</label>
+              <select><option>最新期次（默认）</option><option>全部期次</option><option>暑_10</option><option>暑_9</option><option>暑_8</option><option>暑_7</option></select>
+            </div>
+            <div class="field">
+              <label>渠道二级分类</label>
+              <select><option>全部</option><option>LEC内测</option><option>常规外呼</option><option>外部微转-*</option></select>
+            </div>
+            <div class="field">
+              <label>价体</label>
+              <select><option>全部</option><option>0</option><option>100</option><option>990</option><option>2880</option></select>
+            </div>
+            <div class="field">
+              <label>关键词</label>
+              <input value="" placeholder="年级 / 渠道 / 期次">
+            </div>
+          </div>
+
+          <div class="chips">
+            <button class="chip active">最新期次 46</button>
+            <button class="chip">落后进度 10</button>
+            <button class="chip">未开单</button>
+            <button class="chip">已完成目标 0</button>
+            <button class="chip">仅看历史期次</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>学部</th>
+                  <th>期次</th>
+                  <th>渠道</th>
+                  <th class="num">价体</th>
+                  <th>年级</th>
+                  <th>target_time</th>
+                  <th class="num">目标</th>
+                  <th class="num">现状</th>
+                  <th class="num">差距</th>
+                  <th class="num">完成率</th>
+                  <th class="num">进度</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>初中</td><td>暑_10</td><td>AI托管</td><td class="num">0</td><td>初一</td><td>2026-06-30</td><td class="num">140</td><td class="num">0</td><td class="num">-140</td><td class="num">0.0%</td><td class="num"></td><td><span class="status">未开单</span></td></tr>
+                <tr><td>初中</td><td>暑_10</td><td>AI托管</td><td class="num">0</td><td>初二</td><td>2026-06-30</td><td class="num">120</td><td class="num">0</td><td class="num">-120</td><td class="num">0.0%</td><td class="num"></td><td><span class="status">未开单</span></td></tr>
+                <tr><td>初中</td><td>暑_10</td><td>LEC内测</td><td class="num">100</td><td>初二</td><td>2026-06-30</td><td class="num">600</td><td class="num">0</td><td class="num">-600</td><td class="num">0.0%</td><td class="num"></td><td><span class="status">未开单</span></td></tr>
+                <tr><td>初中</td><td>暑_10</td><td>LLM外呼</td><td class="num">990</td><td>初二</td><td>2026-06-30</td><td class="num">650</td><td class="num">2</td><td class="num">-648</td><td class="num">0.3%</td><td class="num">100.0%</td><td><span class="status late">落后</span></td></tr>
+                <tr><td>初中</td><td>暑_10</td><td>外部微转-*</td><td class="num">100</td><td>初一</td><td>2026-06-30</td><td class="num">190</td><td class="num">0</td><td class="num">-190</td><td class="num">0.0%</td><td class="num"></td><td><span class="status">未开单</span></td></tr>
+                <tr><td>小学</td><td>暑_9</td><td>AI托管</td><td class="num">0</td><td>六年级</td><td></td><td class="num">0</td><td class="num">3</td><td class="num">3</td><td class="num"></td><td class="num"></td><td><span class="status">仅现状</span></td></tr>
+                <tr><td>高中</td><td>暑_10</td><td>常规外呼</td><td class="num">2880</td><td>高一</td><td>2026-06-25</td><td class="num">350</td><td class="num">191</td><td class="num">-159</td><td class="num">54.6%</td><td class="num">66.7%</td><td><span class="status late">落后</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>
