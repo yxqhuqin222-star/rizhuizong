@@ -6,7 +6,7 @@ const state = {
   currentRows: [],
 };
 
-const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:8766" : "";
+const apiBase = "";
 const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "目标", "现状", "差距", "完成率", "进度"];
 
 function fmtNumber(value) {
@@ -47,13 +47,24 @@ async function requestJson(url, options) {
 }
 
 async function loadState() {
-  const data = await requestJson("/api/state");
-  state.allRows = data.summary;
-  state.latestRows = data.latestSummary;
-  renderFileInfo(data.files);
-  renderMetrics(data.metrics.latest);
-  buildFilters();
-  render();
+  try {
+    const response = await fetch("/outputs/tongji_summary/summary_payload.json");
+    if (!response.ok) throw new Error("无法读取数据文件");
+    const data = await response.json();
+    state.allRows = rowsFromPayload(data.summary);
+    state.latestRows = rowsFromPayload(data.latest_summary);
+    renderFileInfo({ demo: { name: "tongji_demo.xlsx", updated_at: "已内置" }, target: { name: "tongji_target.xlsx", updated_at: "已内置" } });
+    renderMetrics(data.metrics.latest);
+    buildFilters();
+    render();
+  } catch (error) {
+    toast(error.message || "加载数据失败");
+  }
+}
+
+function rowsFromPayload(payload) {
+  const headers = payload.headers;
+  return payload.rows.map(row => Object.fromEntries(headers.map((header, index) => [header, row[index]])));
 }
 
 function renderFileInfo(files) {
@@ -280,7 +291,7 @@ function toggleScope() {
 }
 
 bindEvents();
-loadState().catch(error => toast(error.message));
+loadState();
 
 function exportCurrentRows() {
   if (!state.currentRows.length) {
