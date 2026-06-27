@@ -117,6 +117,9 @@ function rowStatus(row) {
   if (row["进度"] !== null && Number(row["完成率"] || 0) < Number(row["进度"])) return { text: "落后", cls: "late" };
   if (Number(row["目标"]) > 0 && Number(row["完成率"] || 0) >= 1) return { text: "已完成", cls: "done" };
   if (Number(row["目标"]) === 0 && Number(row["现状"]) > 0) return { text: "仅现状", cls: "current-only" };
+  if (row["进度"] !== null && Number(row["完成率"] || 0) - Number(row["进度"]) + 1e-9 >= 0.1) {
+    return { text: "快", cls: "normal" };
+  }
   return { text: "正常", cls: "normal" };
 }
 

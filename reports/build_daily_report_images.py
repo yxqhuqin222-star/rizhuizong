@@ -14,6 +14,19 @@ DEMO_PATH = ROOT / "tongji_demo.xlsx"
 OUT_DIR = ROOT / "reports" / "daily_progress"
 TOTAL_DAYS = 6
 DEPARTMENTS = ["小学", "初中", "高中"]
+GRADE_ORDER = {
+    "二年级": 1,
+    "三年级": 2,
+    "四年级": 3,
+    "五年级": 4,
+    "六年级": 5,
+    "初一": 1,
+    "初二": 2,
+    "初三": 3,
+    "高一": 1,
+    "高二": 2,
+    "高三": 3,
+}
 LEC1_CHANNELS = [
     ("YZY", "086", 0.35),
     ("WC", "661", 0.25),
@@ -65,14 +78,17 @@ def gap_abs(progress, time_progress):
 def status_text(target, current, completion, time_progress):
     target = 0 if pd.isna(target) else float(target)
     current = 0 if pd.isna(current) else float(current)
+    completion = 0 if pd.isna(completion) else float(completion)
     if target > 0 and current == 0:
         return "未开单"
-    if not pd.isna(time_progress) and float(completion or 0) < float(time_progress):
+    if not pd.isna(time_progress) and completion < float(time_progress):
         return "落后"
-    if target > 0 and float(completion or 0) >= 1:
+    if target > 0 and completion >= 1:
         return "已完成"
     if target == 0 and current > 0:
         return "仅现状"
+    if not pd.isna(time_progress) and completion - float(time_progress) + 1e-9 >= 0.1:
+        return "快"
     return "正常"
 
 
@@ -143,7 +159,11 @@ def aggregate_grade(df):
     )
     grouped["进度GAP"] = grouped.apply(lambda row: gap_abs(row["招生进度"], row["进度"]), axis=1)
     grouped["剩余天数"] = grouped["进度"].apply(elapsed_days)
-    return grouped.sort_values(["期次", "渠道展示", "年级"], kind="stable")
+    grouped["年级顺序"] = grouped["年级"].map(GRADE_ORDER).fillna(len(GRADE_ORDER) + 1)
+    return (
+        grouped.sort_values(["期次", "渠道展示", "年级顺序", "年级"], kind="stable")
+        .drop(columns="年级顺序")
+    )
 
 
 def bar(value, color, label=None):
@@ -176,6 +196,7 @@ def render_rows(rows, columns):
                     "落后": "late",
                     "已完成": "done",
                     "仅现状": "current-only",
+                    "快": "normal",
                     "正常": "normal",
                 }.get(str(value), "normal")
                 cells.append(f'<td><span class="status {cls}">{text}</span></td>')

@@ -110,6 +110,7 @@ Rules:
 
 - `线索渠道二级分类` values beginning with `外部微转-` are grouped as `外部微转-*`.
 - `进量日期` is used for progress calculation.
+- Status priority is `未开单` / `落后` / `已完成` / `仅现状`, then `快` when `完成率 - 进度 >= 10` percentage points; remaining rows are `正常`.
 
 #### Default latest-term view
 
@@ -132,6 +133,7 @@ Daily progress broadcast field mapping:
 - `渠道展示 = 线索渠道二级分类 + 价体`
 - `招生目标 = 目标`
 - `剩余天数 = 总天数 - (target_time - 进量日期)`
+- `状态` uses the same classification as the dashboard.
 
 DingTalk broadcast note:
 
