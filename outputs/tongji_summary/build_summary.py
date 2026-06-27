@@ -38,6 +38,25 @@ DIMENSIONS = [
     "价体",
     "年级",
 ]
+GRADE_ORDER = {
+    "小学": {
+        "二年级": 1,
+        "三年级": 2,
+        "四年级": 3,
+        "五年级": 4,
+        "六年级": 5,
+    },
+    "初中": {
+        "初一": 1,
+        "初二": 2,
+        "初三": 3,
+    },
+    "高中": {
+        "高一": 1,
+        "高二": 2,
+        "高三": 3,
+    },
+}
 TOTAL_DAYS = 6
 
 
@@ -92,7 +111,20 @@ def build_summary(demo, target):
     summary = (
         target_summary.merge(current_summary, on=DIMENSIONS, how="outer")
         .fillna({"目标": 0, "现状": 0})
-        .sort_values(DIMENSIONS, kind="stable")
+    )
+    summary["年级顺序"] = summary.apply(
+        lambda row: GRADE_ORDER.get(row["学部"], {}).get(
+            row["年级"],
+            len(GRADE_ORDER.get(row["学部"], {})) + 1,
+        ),
+        axis=1,
+    )
+    summary = (
+        summary.sort_values(
+            ["学部", "期次", "线索渠道二级分类", "价体", "年级顺序", "年级"],
+            kind="stable",
+        )
+        .drop(columns="年级顺序")
     )
     summary["目标"] = summary["目标"].astype(int)
     summary["现状"] = summary["现状"].astype(int)

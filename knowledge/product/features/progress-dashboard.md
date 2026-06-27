@@ -4,7 +4,7 @@
 - Owner: User
 - Status: building
 - Priority: high
-- Last updated: 2026-06-26
+- Last updated: 2026-06-27
 
 ## Problem
 
@@ -17,7 +17,9 @@ The user needs to check daily progress against targets quickly after uploading a
 ## Success metrics
 
 - Daily `demo` upload produces refreshed summary data.
+- Clicking `上传今日 demo` directly reloads the fixed project-root `tongji_demo.xlsx` without opening a file picker.
 - Default view shows latest-term data only.
+- Latest-term overview shows separate primary, middle, and high school metric rows without an aggregate or self-study row.
 - User can export latest-term and full summary data.
 - User can export separate daily progress broadcast images for primary, middle, and high school views.
 - User can send primary, middle, and high school daily progress broadcast images to the configured DingTalk group robot.
@@ -29,7 +31,8 @@ The user needs to check daily progress against targets quickly after uploading a
 - `渠道展示 = 线索渠道二级分类 + 价体`
 - `招生目标 = 目标`
 - `剩余天数 = 总天数 - (target_time - 进量日期)`
-- `状态` matches the dashboard status rule: 未开单 / 落后 / 已完成 / 仅现状 / 正常.
+- `状态` matches the dashboard status rule: 未开单 / 落后 / 已完成 / 仅现状 / 快 / 正常. `快` means `完成率 - 进度 >= 10` percentage points after higher-priority statuses are excluded.
+- Dashboard and broadcast grade rows follow business order: 小学二至六年级、初中初一至初三、高中高一至高三.
 
 ## Risks
 

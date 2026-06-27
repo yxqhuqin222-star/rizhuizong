@@ -59,6 +59,8 @@ def load_local_env():
 
 load_local_env()
 DINGTALK_WEBHOOK = os.environ.get("DINGTALK_WEBHOOK", "")
+REPORT_IMAGE_UPLOAD_URL = os.environ.get("REPORT_IMAGE_UPLOAD_URL", "")
+REPORT_UPLOAD_TOKEN = os.environ.get("REPORT_UPLOAD_TOKEN", "")
 
 
 def load_summary_module():
@@ -109,6 +111,18 @@ def ensure_daily_report_images():
         subprocess.run([str(NODE_BIN), str(REPORT_EXPORT_SCRIPT)], cwd=ROOT, check=True)
 
 
+def ensure_report_image_current(image_path):
+    source_paths = (DEMO_PATH, TARGET_PATH, REPORT_SCRIPT, REPORT_EXPORT_SCRIPT)
+    latest_source_mtime = max(path.stat().st_mtime for path in source_paths)
+    needs_refresh = (
+        not image_path.exists()
+        or image_path.stat().st_mtime < latest_source_mtime
+        or datetime.fromtimestamp(image_path.stat().st_mtime).date() < datetime.now().date()
+    )
+    if needs_refresh:
+        ensure_daily_report_images()
+
+
 def ensure_payload():
     payload_path = OUTPUT_DIR / "summary_payload.json"
     if not payload_path.exists():
@@ -116,16 +130,25 @@ def ensure_payload():
     return json.loads(payload_path.read_text(encoding="utf-8"))
 
 
-def report_image_url(dept, host):
-    public_base = os.environ.get("DINGTALK_REPORT_BASE_URL", "").rstrip("/")
-    if public_base:
-        return f"{public_base}/download/report?dept={quote(dept)}"
-    return f"http://{host}/download/report?dept={quote(dept)}"
-
-
-def is_local_url(url):
-    parsed = urlparse(url)
-    return parsed.hostname in {"0.0.0.0", "localhost", "::1"}
+def upload_report_image(dept, image_path):
+    if not REPORT_IMAGE_UPLOAD_URL or not REPORT_UPLOAD_TOKEN:
+        raise ValueError("缺少 REPORT_IMAGE_UPLOAD_URL 或 REPORT_UPLOAD_TOKEN，无法上传播报图。")
+    separator = "&" if "?" in REPORT_IMAGE_UPLOAD_URL else "?"
+    request = Request(
+        f"{REPORT_IMAGE_UPLOAD_URL}{separator}dept={quote(dept)}",
+        data=image_path.read_bytes(),
+        headers={
+            "Authorization": f"Bearer {REPORT_UPLOAD_TOKEN}",
+            "Content-Type": "image/png",
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    image_url = result.get("url")
+    if not image_url:
+        raise RuntimeError("图片存储服务未返回公开地址。")
+    return image_url
 
 
 def format_report_summary_value(key, value):
@@ -134,40 +157,27 @@ def format_report_summary_value(key, value):
     return value
 
 
-def send_dingtalk_report(dept, host):
+def send_dingtalk_report(dept):
     if dept not in REPORT_FILES:
         raise ValueError("未知播报图类型。")
     if not DINGTALK_WEBHOOK:
         raise ValueError("缺少 DINGTALK_WEBHOOK，请在 .env.local 或环境变量中配置钉钉机器人地址。")
 
     image_path = REPORT_FILES[dept]
-    if not image_path.exists():
-        ensure_daily_report_images()
+    ensure_report_image_current(image_path)
     if not image_path.exists():
         raise FileNotFoundError(f"播报图不存在：{image_path.name}，请先下载一次播报图或重新生成 Summary。")
 
     label = REPORT_LABELS[dept]
-    image_url = report_image_url(dept, host)
-    cache_bust = int(image_path.stat().st_mtime)
-    separator = "&" if "?" in image_url else "?"
-    image_url = f"{image_url}{separator}v={cache_bust}"
+    image_url = upload_report_image(dept, image_path)
     title = f"{DINGTALK_KEYWORD} {label}每日招生进度播报"
-    local_only_url = is_local_url(image_url)
     manifest = json.loads((REPORT_DIR / "manifest.json").read_text(encoding="utf-8"))
     report_meta = next((item for item in manifest if item["dept"] == label), None)
     summary = report_meta["summary"] if report_meta else {}
     summary_text = "\n".join(
         f"- {key}：{format_report_summary_value(key, value)}" for key, value in summary.items()
     )
-    if local_only_url:
-        text = (
-            f"### {title}\n\n"
-            f"{summary_text}\n\n"
-            f"> 图片已在本机生成，但当前地址是 0.0.0.0，钉钉群内无法直接渲染。"
-            f"请在本机看板下载：{image_url}"
-        )
-    else:
-        text = f"### {title}\n\n{summary_text}\n\n![{title}]({image_url})\n\n[查看/下载图片]({image_url})"
+    text = f"### {title}\n\n{summary_text}\n\n![{title}]({image_url})\n\n[查看/下载图片]({image_url})"
     payload = {
         "msgtype": "markdown",
         "markdown": {
@@ -189,7 +199,7 @@ def send_dingtalk_report(dept, host):
         "dept": dept,
         "label": label,
         "imageUrl": image_url,
-        "localOnlyUrl": local_only_url,
+        "localOnlyUrl": False,
         "dingtalk": result,
     }
 
@@ -353,6 +363,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_file(WEB_DIR / "styles.css", "text/css; charset=utf-8")
             elif path in ("/static/app.js", "/app.js"):
                 self.send_file(WEB_DIR / "app.js", "application/javascript; charset=utf-8")
+            elif path == "/outputs/tongji_summary/summary_payload.json":
+                self.send_file(OUTPUT_DIR / "summary_payload.json", "application/json; charset=utf-8")
             elif path == "/api/state":
                 self.send_json(state_payload())
             elif path == "/favicon.ico":
@@ -375,11 +387,30 @@ class Handler(BaseHTTPRequestHandler):
                 if report_path is None:
                     self.send_error(404, "Unknown report")
                     return
-                if not report_path.exists():
-                    ensure_daily_report_images()
+                ensure_report_image_current(report_path)
                 self.send_file(report_path, "image/png")
             else:
                 self.send_error(404)
+        except Exception as exc:
+            self.send_json({"error": str(exc)}, status=500)
+
+    def do_HEAD(self):
+        parsed = urlparse(self.path)
+        try:
+            if parsed.path != "/download/report":
+                self.send_error(404)
+                return
+            dept = parse_qs(parsed.query).get("dept", [""])[0]
+            report_path = REPORT_FILES.get(dept)
+            if report_path is None:
+                self.send_error(404, "Unknown report")
+                return
+            ensure_report_image_current(report_path)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(report_path.stat().st_size))
+            self.end_headers()
         except Exception as exc:
             self.send_json({"error": str(exc)}, status=500)
 
@@ -388,6 +419,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/api/upload":
                 self.handle_upload()
+            elif parsed.path == "/api/reload-demo":
+                if not DEMO_PATH.exists():
+                    raise FileNotFoundError(f"固定 demo 文件不存在：{DEMO_PATH}")
+                rebuild_outputs()
+                self.send_json({"ok": True, "changed": ["demo"], "state": state_payload()})
             elif parsed.path == "/api/query":
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -396,8 +432,7 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/broadcast-report":
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                host = self.headers.get("Host", "0.0.0.0:8766")
-                result = send_dingtalk_report(data.get("dept", ""), host)
+                result = send_dingtalk_report(data.get("dept", ""))
                 if not result["ok"]:
                     self.send_json(result, status=502)
                     return

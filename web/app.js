@@ -8,6 +8,7 @@ const state = {
 
 const apiBase = "";
 const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "目标", "现状", "差距", "完成率", "进度"];
+const metricDepartments = ["小学", "初中", "高中"];
 
 function fmtNumber(value) {
   return Number(value || 0).toLocaleString("zh-CN");
@@ -72,12 +73,51 @@ function renderFileInfo(files) {
   document.getElementById("targetInfo").innerHTML = `当前：${files.target?.name || "-"}<br>更新时间：${files.target?.updated_at || "-"}`;
 }
 
+function metricsForRows(rows) {
+  const targetTotal = rows.reduce((sum, row) => sum + Number(row["目标"] || 0), 0);
+  const currentTotal = rows.reduce((sum, row) => sum + Number(row["现状"] || 0), 0);
+  const progressValues = rows
+    .map(row => row["进度"])
+    .filter(value => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)))
+    .map(Number);
+  const behindCount = rows.filter(row => {
+    const progress = row["进度"];
+    return progress !== null
+      && progress !== undefined
+      && progress !== ""
+      && Number(row["完成率"] || 0) < Number(progress);
+  }).length;
+  return {
+    target_total: targetTotal,
+    current_total: currentTotal,
+    completion: targetTotal ? currentTotal / targetTotal : null,
+    avg_progress: progressValues.length
+      ? progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length
+      : null,
+    behind_count: behindCount,
+  };
+}
+
+function renderDepartmentMetrics() {
+  const tbody = document.getElementById("departmentMetricsBody");
+  tbody.innerHTML = "";
+  metricDepartments.forEach(department => {
+    const metrics = metricsForRows(state.latestRows.filter(row => row["学部"] === department));
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <th scope="row">${department}</th>
+      <td>${fmtNumber(metrics.target_total)}</td>
+      <td>${fmtNumber(metrics.current_total)}</td>
+      <td class="red">${fmtPercent(metrics.completion) || "-"}</td>
+      <td>${fmtPercent(metrics.avg_progress) || "-"}</td>
+      <td class="red">${fmtNumber(metrics.behind_count)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
 function renderMetrics(metrics) {
-  document.getElementById("metricTarget").textContent = fmtNumber(metrics.target_total);
-  document.getElementById("metricCurrent").textContent = fmtNumber(metrics.current_total);
-  document.getElementById("metricCompletion").textContent = fmtPercent(metrics.completion);
-  document.getElementById("metricProgress").textContent = fmtPercent(metrics.avg_progress);
-  document.getElementById("metricBehind").textContent = fmtNumber(metrics.behind_count);
+  renderDepartmentMetrics();
   document.getElementById("chipAll").textContent = `${state.scope === "latest" ? "最新期次" : "全部期次"} ${metrics.row_count}`;
   document.getElementById("chipBehind").textContent = `落后进度 ${metrics.behind_count}`;
 }
@@ -117,6 +157,9 @@ function rowStatus(row) {
   if (row["进度"] !== null && Number(row["完成率"] || 0) < Number(row["进度"])) return { text: "落后", cls: "late" };
   if (Number(row["目标"]) > 0 && Number(row["完成率"] || 0) >= 1) return { text: "已完成", cls: "done" };
   if (Number(row["目标"]) === 0 && Number(row["现状"]) > 0) return { text: "仅现状", cls: "current-only" };
+  if (row["进度"] !== null && Number(row["完成率"] || 0) - Number(row["进度"]) + 1e-9 >= 0.1) {
+    return { text: "快", cls: "normal" };
+  }
   return { text: "正常", cls: "normal" };
 }
 
@@ -145,9 +188,6 @@ function filteredRows() {
     }
     const status = rowStatus(row);
     if (state.chip === "behind" && status.text !== "落后") return false;
-    if (state.chip === "no-current" && !(Number(row["目标"]) > 0 && Number(row["现状"]) === 0)) return false;
-    if (state.chip === "done" && Number(row["完成率"] || 0) < 1) return false;
-    if (state.chip === "history" && state.scope !== "all") return false;
     return true;
   });
 }
@@ -208,6 +248,32 @@ async function uploadFile(kind, file) {
   }
 }
 
+async function reloadDemoFile() {
+  const button = document.getElementById("demoUploadButton");
+  toast("正在读取固定 demo 并重算...");
+  uploadStatus("demo", "pending", "正在读取固定 demo 并重算 summary...");
+  button.disabled = true;
+  try {
+    const data = await requestJson("/api/reload-demo", { method: "POST" });
+    state.allRows = data.state.summary;
+    state.latestRows = data.state.latestSummary;
+    renderFileInfo(data.state.files);
+    renderMetrics(data.state.metrics.latest);
+    buildFilters();
+    render();
+    const updatedAt = data.state.files.demo?.updated_at
+      ? `更新时间：${data.state.files.demo.updated_at}`
+      : "已完成重算";
+    uploadStatus("demo", "success", `demo 读取成功，summary 已更新。${updatedAt}`);
+    toast("demo 读取成功，summary 已更新");
+  } catch (error) {
+    uploadStatus("demo", "error", `demo 读取失败：${error.message}`);
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function runNaturalQuery() {
   const sample = "6月23日，out_wxst_wxstqt_1774944753086 的成单量是多少？";
   const query = window.prompt("请输入查询问题", sample);
@@ -241,9 +307,8 @@ async function broadcastReport(dept) {
 }
 
 function bindEvents() {
-  document.getElementById("demoUploadButton").addEventListener("click", () => document.getElementById("demoFile").click());
+  document.getElementById("demoUploadButton").addEventListener("click", reloadDemoFile);
   document.getElementById("targetUploadButton").addEventListener("click", () => document.getElementById("targetFile").click());
-  document.getElementById("demoFile").addEventListener("change", event => event.target.files[0] && uploadFile("demo", event.target.files[0]));
   document.getElementById("targetFile").addEventListener("change", event => event.target.files[0] && uploadFile("target", event.target.files[0]));
 
   ["filterDepartment", "filterTerm", "filterChannel", "filterPayment", "filterOrderDate", "filterKeyword"].forEach(id => {
@@ -255,7 +320,6 @@ function bindEvents() {
       document.querySelectorAll(".chip").forEach(el => el.classList.remove("active"));
       chip.classList.add("active");
       state.chip = chip.dataset.chip;
-      if (state.chip === "history") state.scope = "all";
       render();
     });
   });

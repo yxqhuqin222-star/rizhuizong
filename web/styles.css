@@ -200,44 +200,48 @@ main {
   justify-content: flex-end;
 }
 
-.cards {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(130px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.card, .panel {
+.panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
 
-.card {
-  padding: 14px 14px 12px;
-  min-height: 104px;
+.metrics-panel {
+  margin-bottom: 16px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
 }
 
-.card .label {
-  color: var(--muted);
+.metrics-table-wrap { overflow-x: auto; }
+
+.metrics-table {
+  min-width: 760px;
   font-size: 12px;
 }
 
-.card .value {
-  margin-top: 8px;
+.metrics-table th {
+  position: static;
+  padding: 11px 14px;
+}
+
+.metrics-table td {
+  padding: 14px;
   font-size: 25px;
   font-weight: 760;
   line-height: 1;
 }
 
-.card .hint {
-  margin-top: 9px;
-  color: var(--muted);
-  font-size: 12px;
+.metrics-table tbody th {
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
 }
 
-.value.red { color: var(--red); }
+.metrics-table .red { color: var(--red); }
 
 .panel { overflow: hidden; }
 
@@ -443,6 +447,5 @@ td.num, th.num { text-align: right; }
 @media (max-width: 1180px) {
   .app { grid-template-columns: 1fr; }
   aside { position: static; height: auto; }
-  .cards { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
   .filters { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
 }
