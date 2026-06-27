@@ -73,6 +73,14 @@ function renderFileInfo(files) {
   document.getElementById("targetInfo").innerHTML = `当前：${files.target?.name || "-"}<br>更新时间：${files.target?.updated_at || "-"}`;
 }
 
+function isBehindProgress(row) {
+  const progress = row["进度"];
+  return progress !== null
+    && progress !== undefined
+    && progress !== ""
+    && Number(row["完成率"] || 0) < Number(progress);
+}
+
 function metricsForRows(rows) {
   const targetTotal = rows.reduce((sum, row) => sum + Number(row["目标"] || 0), 0);
   const currentTotal = rows.reduce((sum, row) => sum + Number(row["现状"] || 0), 0);
@@ -80,13 +88,7 @@ function metricsForRows(rows) {
     .map(row => row["进度"])
     .filter(value => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)))
     .map(Number);
-  const behindCount = rows.filter(row => {
-    const progress = row["进度"];
-    return progress !== null
-      && progress !== undefined
-      && progress !== ""
-      && Number(row["完成率"] || 0) < Number(progress);
-  }).length;
+  const behindCount = rows.filter(isBehindProgress).length;
   return {
     target_total: targetTotal,
     current_total: currentTotal,
@@ -103,6 +105,7 @@ function renderDepartmentMetrics() {
   tbody.innerHTML = "";
   metricDepartments.forEach(department => {
     const metrics = metricsForRows(state.latestRows.filter(row => row["学部"] === department));
+    const behindCount = fmtNumber(metrics.behind_count);
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <th scope="row">${department}</th>
@@ -110,8 +113,16 @@ function renderDepartmentMetrics() {
       <td>${fmtNumber(metrics.current_total)}</td>
       <td class="red">${fmtPercent(metrics.completion) || "-"}</td>
       <td>${fmtPercent(metrics.avg_progress) || "-"}</td>
-      <td class="red">${fmtNumber(metrics.behind_count)}</td>
+      <td class="red">
+        <button
+          class="metric-drilldown"
+          type="button"
+          aria-label="查看${department}${behindCount}个落后项"
+          ${metrics.behind_count ? "" : "disabled"}
+        >${behindCount}</button>
+      </td>
     `;
+    tr.querySelector(".metric-drilldown").addEventListener("click", () => showBehindDetails(department));
     tbody.appendChild(tr);
   });
 }
@@ -186,8 +197,7 @@ function filteredRows() {
       const haystack = tableColumns.map(key => row[key]).join(" ");
       if (!haystack.includes(keyword)) return false;
     }
-    const status = rowStatus(row);
-    if (state.chip === "behind" && status.text !== "落后") return false;
+    if (state.chip === "behind" && !isBehindProgress(row)) return false;
     return true;
   });
 }
@@ -195,6 +205,10 @@ function filteredRows() {
 function render() {
   const rows = filteredRows();
   state.currentRows = rows;
+  const department = document.getElementById("filterDepartment").value;
+  document.getElementById("tableTitle").textContent = state.chip === "behind"
+    ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
+    : state.scope === "latest" ? "最新期次明细" : "全部期次明细";
   const tbody = document.getElementById("summaryBody");
   tbody.innerHTML = "";
 
@@ -217,6 +231,20 @@ function render() {
     `;
     tbody.appendChild(tr);
   });
+}
+
+function showBehindDetails(department) {
+  state.scope = "latest";
+  state.chip = "behind";
+  buildFilters();
+  document.getElementById("filterDepartment").value = department;
+  ["filterTerm", "filterChannel", "filterPayment", "filterOrderDate", "filterKeyword"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  document.querySelectorAll(".chip").forEach(el => el.classList.toggle("active", el.dataset.chip === "behind"));
+  document.getElementById("toggleScopeButton").textContent = "切换到全部期次";
+  render();
+  document.getElementById("summary").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function uploadFile(kind, file) {
