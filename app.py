@@ -419,6 +419,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/api/upload":
                 self.handle_upload()
+            elif parsed.path == "/api/reload-demo":
+                if not DEMO_PATH.exists():
+                    raise FileNotFoundError(f"固定 demo 文件不存在：{DEMO_PATH}")
+                rebuild_outputs()
+                self.send_json({"ok": True, "changed": ["demo"], "state": state_payload()})
             elif parsed.path == "/api/query":
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8"))

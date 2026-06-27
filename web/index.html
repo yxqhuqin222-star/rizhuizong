@@ -27,7 +27,6 @@
         <div class="upload primary">
           <strong>demo 数据</strong>
           <div class="meta" id="demoInfo">读取中...</div>
-          <input id="demoFile" type="file" accept=".xlsx,.xls" hidden>
           <button class="btn block primary" id="demoUploadButton">上传今日 demo</button>
           <div class="upload-status" id="demoUploadStatus" aria-live="polite"></div>
         </div>
@@ -70,26 +69,21 @@
         </div>
       </div>
 
-      <section class="cards">
-        <div class="card">
-          <div class="label">最新期次目标</div>
-          <div class="value" id="metricTarget">-</div>
-        </div>
-        <div class="card">
-          <div class="label">最新期次现状</div>
-          <div class="value" id="metricCurrent">-</div>
-        </div>
-        <div class="card">
-          <div class="label">最新期次完成率</div>
-          <div class="value red" id="metricCompletion">-</div>
-        </div>
-        <div class="card">
-          <div class="label">平均进度</div>
-          <div class="value" id="metricProgress">-</div>
-        </div>
-        <div class="card">
-          <div class="label">最新期次落后项</div>
-          <div class="value red" id="metricBehind">-</div>
+      <section class="metrics-panel" aria-label="各学部最新期次指标">
+        <div class="metrics-table-wrap">
+          <table class="metrics-table">
+            <thead>
+              <tr>
+                <th>学部</th>
+                <th>最新期次目标</th>
+                <th>最新期次现状</th>
+                <th>完成率</th>
+                <th>平均进度</th>
+                <th>落后项</th>
+              </tr>
+            </thead>
+            <tbody id="departmentMetricsBody"></tbody>
+          </table>
         </div>
       </section>
 
@@ -132,9 +126,6 @@
         <div class="chips">
           <button class="chip active" data-chip="all" id="chipAll">最新期次</button>
           <button class="chip" data-chip="behind" id="chipBehind">落后进度</button>
-          <button class="chip" data-chip="no-current">未开单</button>
-          <button class="chip" data-chip="done">已完成目标</button>
-          <button class="chip" data-chip="history">仅看历史期次</button>
         </div>
 
         <div class="table-wrap">

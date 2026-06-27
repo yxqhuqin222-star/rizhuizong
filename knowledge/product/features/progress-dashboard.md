@@ -17,7 +17,9 @@ The user needs to check daily progress against targets quickly after uploading a
 ## Success metrics
 
 - Daily `demo` upload produces refreshed summary data.
+- Clicking `上传今日 demo` directly reloads the fixed project-root `tongji_demo.xlsx` without opening a file picker.
 - Default view shows latest-term data only.
+- Latest-term overview shows separate primary, middle, and high school metric rows without an aggregate or self-study row.
 - User can export latest-term and full summary data.
 - User can export separate daily progress broadcast images for primary, middle, and high school views.
 - User can send primary, middle, and high school daily progress broadcast images to the configured DingTalk group robot.
