@@ -243,6 +243,40 @@ main {
 
 .metrics-table .red { color: var(--red); }
 
+.metric-drilldown {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  padding: 3px 7px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+.metric-drilldown:hover {
+  background: #f9e9e7;
+}
+
+.metric-drilldown:focus-visible {
+  outline: 3px solid rgba(181, 67, 59, 0.22);
+  outline-offset: 1px;
+}
+
+.metric-drilldown:active {
+  transform: scale(0.95);
+}
+
+.metric-drilldown:disabled {
+  cursor: default;
+  text-decoration: none;
+  opacity: 0.55;
+}
+
 .panel { overflow: hidden; }
 
 .panel-head {
