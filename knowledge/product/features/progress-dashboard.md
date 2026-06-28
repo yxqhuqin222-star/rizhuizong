@@ -4,7 +4,7 @@
 - Owner: User
 - Status: building
 - Priority: high
-- Last updated: 2026-06-27
+- Last updated: 2026-06-28
 
 ## Problem
 
@@ -26,6 +26,9 @@ The user needs to check daily progress against targets quickly after uploading a
 - User can export separate daily progress broadcast images for primary, middle, and high school views.
 - User can send primary, middle, and high school daily progress broadcast images to the configured DingTalk group robot.
 - Date + `last_from` query returns the correct `成单量`.
+- Channel aliases such as `YZY` resolve to their configured `last_from`.
+- Missing query conditions trigger at most two focused clarification rounds and never use guessed defaults.
+- Query details paginate at 10 rows by default with 10 / 20 / 50 row options.
 
 ## Daily Broadcast Field Mapping
 
@@ -41,12 +44,14 @@ The user needs to check daily progress against targets quickly after uploading a
 - Excel field names may drift.
 - Latest-term detection may need adjustment if `target` table `期次` naming changes.
 - Natural-language query may be expected to support more patterns than V1.
+- Channel aliases must remain unique and synchronized with new `last_from` values.
 
 ## Dependencies
 
 - `tongji_demo.xlsx`
 - `tongji_target.xlsx`
 - `outputs/tongji_summary/build_summary.py`
+- `config/channel_aliases.csv`
 - DingTalk custom robot webhook for group broadcast.
 
 ## Timeline

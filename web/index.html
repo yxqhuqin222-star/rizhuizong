@@ -6,7 +6,7 @@
   <title>进度监控</title>
   <link rel="icon" type="image/png" href="./favicon.png?v=20260628-1">
   <link rel="shortcut icon" href="./favicon.ico?v=20260628-1">
-  <link rel="stylesheet" href="./styles.css?v=20260626-2">
+  <link rel="stylesheet" href="./styles.css?v=20260628-4">
 </head>
 <body>
   <div class="app">
@@ -59,7 +59,7 @@
       </div>
     </aside>
 
-    <main>
+    <main id="mainContent">
       <div class="topbar" id="overview">
         <div class="title">
           <h1>进度监控</h1>
@@ -70,6 +70,91 @@
           <button class="btn primary" id="refreshButton">重新生成 Summary</button>
         </div>
       </div>
+
+      <section class="panel natural-query-panel" id="naturalQueryPanel" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>自然语言查询</h2>
+            <p>用一句话查询指定渠道在某个日期的进量。</p>
+          </div>
+          <button class="btn" id="closeNaturalQuery" type="button">返回进度监控</button>
+        </div>
+
+        <form class="natural-query-form" id="naturalQueryForm">
+          <label for="naturalQueryInput">你想查询什么？</label>
+          <div class="natural-query-compose">
+            <input
+              id="naturalQueryInput"
+              autocomplete="off"
+              placeholder="例如：6月27日YZY渠道的进量"
+            >
+            <button class="btn primary" id="naturalQuerySubmit" type="submit">开始查询</button>
+          </div>
+          <div class="natural-query-examples">
+            <span>试试这样问：</span>
+            <button type="button" data-query-example="YZY渠道的进量">YZY渠道的进量</button>
+            <button type="button" data-query-example="6月27日YZY渠道的进量">6月27日YZY渠道的进量</button>
+          </div>
+        </form>
+
+        <div class="query-clarification" id="queryClarification" hidden aria-live="polite">
+          <span id="queryClarificationText"></span>
+          <button class="btn" id="restartNaturalQuery" type="button">重新提问</button>
+        </div>
+
+        <div class="query-result" id="queryResult" hidden>
+          <details class="query-interpretation" id="queryInterpretation">
+            <summary>查看系统理解</summary>
+            <div class="query-condition-list" id="queryConditionList"></div>
+          </details>
+
+          <div class="query-answer">
+            <span>查询结论</span>
+            <strong id="queryAnswer"></strong>
+          </div>
+
+          <div class="query-result-head">
+            <div>
+              <h3>查询明细</h3>
+              <span id="queryPageSummary"></span>
+            </div>
+            <div class="query-result-actions">
+              <label for="queryPageSize">每页</label>
+              <select id="queryPageSize">
+                <option value="10" selected>10 条</option>
+                <option value="20">20 条</option>
+                <option value="50">50 条</option>
+              </select>
+              <button class="btn" id="downloadQueryResult" type="button">导出全部明细</button>
+            </div>
+          </div>
+
+          <div class="table-wrap query-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>下单日期</th>
+                  <th>渠道名称</th>
+                  <th>last_from</th>
+                  <th>学部</th>
+                  <th>期次</th>
+                  <th>年级</th>
+                  <th>渠道</th>
+                  <th class="num">价体</th>
+                  <th class="num">成单量</th>
+                </tr>
+              </thead>
+              <tbody id="queryResultBody"></tbody>
+            </table>
+          </div>
+
+          <div class="query-pagination">
+            <button class="btn" id="queryPreviousPage" type="button">上一页</button>
+            <div class="query-page-numbers" id="queryPageNumbers"></div>
+            <button class="btn" id="queryNextPage" type="button">下一页</button>
+          </div>
+        </div>
+      </section>
 
       <section class="metrics-panel" aria-label="各学部最新期次指标">
         <div class="metrics-table-wrap">
@@ -158,6 +243,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=20260628-2"></script>
+  <script src="./app.js?v=20260628-4"></script>
 </body>
 </html>

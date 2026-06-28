@@ -26,6 +26,7 @@ SUMMARY_SCRIPT = OUTPUT_DIR / "build_summary.py"
 WORKBOOK_SCRIPT = OUTPUT_DIR / "build_workbook.mjs"
 NODE_BIN = Path("/Users/kityhello/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node")
 LAST_QUERY_PATH = OUTPUT_DIR / "query_result.csv"
+CHANNEL_ALIAS_PATH = ROOT / "config" / "channel_aliases.csv"
 REPORT_SCRIPT = ROOT / "reports" / "build_daily_report_images.py"
 REPORT_EXPORT_SCRIPT = ROOT / "reports" / "export_daily_report_images.mjs"
 REPORT_DIR = ROOT / "reports" / "daily_progress"
@@ -43,6 +44,7 @@ REPORT_LABELS = {
 }
 DINGTALK_KEYWORD = "成单"
 SERVER_DISABLED_PATH = ROOT / ".dashboard-server-disabled"
+_query_demo_cache = None
 
 
 def load_local_env():
@@ -235,7 +237,49 @@ def infer_year(demo):
     return datetime.now().year
 
 
-def parse_query(text, demo):
+def load_query_demo():
+    global _query_demo_cache
+    stat = DEMO_PATH.stat()
+    cache_key = (stat.st_mtime_ns, stat.st_size)
+    if _query_demo_cache and _query_demo_cache[0] == cache_key:
+        return _query_demo_cache[1]
+    demo = pd.read_excel(DEMO_PATH, sheet_name=summary_module.DEMO_SHEET)
+    _query_demo_cache = (cache_key, demo)
+    return demo
+
+
+def normalize_query_text(value):
+    return re.sub(r"[\s_-]+", "", str(value).lower())
+
+
+def load_channel_aliases():
+    with CHANNEL_ALIAS_PATH.open(encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    aliases = []
+    names_by_code = {}
+    codes_by_alias = {}
+    for row in rows:
+        code = row["last_from"].strip()
+        channel_name = row["channel_name"].strip()
+        existing_name = names_by_code.get(code)
+        if existing_name and existing_name != channel_name:
+            raise ValueError(f"同一 last_from 配置了多个渠道名称：{code}")
+        names_by_code[code] = channel_name
+        values = [channel_name, *row.get("aliases", "").split("|")]
+        for value in values:
+            normalized = normalize_query_text(value)
+            if normalized:
+                existing_code = codes_by_alias.get(normalized)
+                if existing_code and existing_code != code:
+                    raise ValueError(f"渠道别名重复：{value}")
+                codes_by_alias[normalized] = code
+                aliases.append((normalized, code, channel_name))
+    aliases.sort(key=lambda item: len(item[0]), reverse=True)
+    return aliases, names_by_code
+
+
+def parse_query_date(text, demo):
     year = infer_year(demo)
     date_match = re.search(r"(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})", text)
     if date_match:
@@ -245,42 +289,142 @@ def parse_query(text, demo):
     else:
         date_match = re.search(r"(\d{1,2})月(\d{1,2})日", text)
         if not date_match:
-            raise ValueError("未识别到日期，请输入类似“6月23日”。")
+            date_match = re.search(r"(?<!\d)(\d{1,2})[./-](\d{1,2})(?!\d)", text)
+        if not date_match:
+            return None
         month = int(date_match.group(1))
         day = int(date_match.group(2))
+    try:
+        return datetime(year, month, day).strftime("%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("日期无效，请输入类似“6月27日”。") from exc
+
+
+def parse_query(text, demo, context=None):
+    aliases, names_by_code = load_channel_aliases()
+    parsed = {}
+
+    if isinstance(context, dict):
+        context_date = str(context.get("date", ""))
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", context_date):
+            parsed["date"] = context_date
+        context_code = str(context.get("last_from", ""))
+        if re.fullmatch(r"out_[A-Za-z0-9_]+", context_code):
+            parsed["last_from"] = context_code
+            parsed["channel_name"] = names_by_code.get(context_code, context_code)
+        if context.get("metric") == "成单量":
+            parsed["metric"] = "成单量"
+
+    query_date = parse_query_date(text, demo)
+    if query_date:
+        parsed["date"] = query_date
 
     last_from_match = re.search(r"(out_[A-Za-z0-9_]+)", text)
-    if not last_from_match:
-        raise ValueError("未识别到 last_from 编码，请输入类似 out_xxx 的编码。")
+    if last_from_match:
+        code = last_from_match.group(1)
+        parsed["last_from"] = code
+        parsed["channel_name"] = names_by_code.get(code, code)
+    else:
+        normalized_text = normalize_query_text(text)
+        matched_channels = {
+            code: channel_name
+            for alias, code, channel_name in aliases
+            if alias in normalized_text
+        }
+        if len(matched_channels) > 1:
+            if re.search(r"成单量|进量", text, re.IGNORECASE):
+                parsed["metric"] = "成单量"
+            return {
+                "status": "needs_clarification",
+                "missingField": "last_from",
+                "question": "检测到多个渠道，你想查询哪一个？",
+                "context": parsed,
+            }
+        if matched_channels:
+            code, channel_name = next(iter(matched_channels.items()))
+            parsed["last_from"] = code
+            parsed["channel_name"] = channel_name
+
+    if re.search(r"成单量|进量", text, re.IGNORECASE):
+        parsed["metric"] = "成单量"
+
+    required = [
+        ("metric", "你想查询什么指标？目前支持成单量（进量）。"),
+        ("last_from", "你想查询哪个渠道？"),
+        ("date", "你想查询哪个时间段的？"),
+    ]
+    for field, question in required:
+        if field not in parsed:
+            return {
+                "status": "needs_clarification",
+                "missingField": field,
+                "question": question,
+                "context": parsed,
+            }
 
     return {
-        "date": f"{year:04d}-{month:02d}-{day:02d}",
-        "last_from": last_from_match.group(1),
+        "status": "complete",
+        "conditions": {
+            "date": parsed["date"],
+            "last_from": parsed["last_from"],
+            "channelName": parsed["channel_name"],
+            "metric": parsed["metric"],
+        },
     }
 
 
-def run_natural_query(text):
-    demo = pd.read_excel(DEMO_PATH, sheet_name=summary_module.DEMO_SHEET)
+def run_natural_query(
+    text,
+    context=None,
+    page=1,
+    page_size=10,
+    demo=None,
+    export_path=LAST_QUERY_PATH,
+):
+    if demo is None:
+        demo = load_query_demo()
     summary_module.validate_columns(demo, summary_module.DEMO_REQUIRED_COLUMNS, "demo")
-    parsed = parse_query(text, demo)
+    parsed = parse_query(text, demo, context=context)
+    if parsed["status"] == "needs_clarification":
+        return parsed
+
+    conditions = parsed["conditions"]
 
     order_dates = pd.to_datetime(demo["下单日期"], errors="coerce").dt.strftime("%Y-%m-%d")
-    mask = order_dates.eq(parsed["date"]) & demo["last_from"].astype(str).eq(parsed["last_from"])
+    mask = order_dates.eq(conditions["date"]) & demo["last_from"].astype(str).eq(conditions["last_from"])
     result = demo.loc[mask].copy()
-    total = int(result["成单量"].sum()) if len(result) else 0
+    total = int(pd.to_numeric(result["成单量"], errors="coerce").fillna(0).sum())
 
     export_cols = ["下单日期", "last_from", "成单量", "年级", "学部", "期次", "线索渠道二级分类", "价体"]
-    result[export_cols].to_csv(LAST_QUERY_PATH, index=False, encoding="utf-8-sig")
+    if export_path is not None:
+        result[export_cols].to_csv(export_path, index=False, encoding="utf-8-sig")
 
-    preview = result[export_cols].head(20).astype(object).where(pd.notna(result[export_cols]), None)
+    page_size = int(page_size) if str(page_size).isdigit() else 10
+    if page_size not in (10, 20, 50):
+        page_size = 10
+    page = int(page) if str(page).isdigit() else 1
+    total_pages = max(1, (len(result) + page_size - 1) // page_size)
+    page = min(max(1, page), total_pages)
+    start = (page - 1) * page_size
+
+    page_rows = result[export_cols].iloc[start:start + page_size]
+    page_rows = page_rows.astype(object).where(pd.notna(page_rows), None)
     return {
+        "status": "complete",
         "query": text,
-        "conditions": parsed,
+        "conditions": conditions,
         "total": total,
         "matchedRows": int(len(result)),
-        "preview": [
+        "answer": (
+            f"{conditions['date']}，{conditions['channelName']}的成单量是"
+            f"{total}，命中{len(result)}行。"
+        ),
+        "page": page,
+        "pageSize": page_size,
+        "totalPages": total_pages,
+        "rows": [
             {col: json_safe(row[col]) for col in export_cols}
-            for _, row in preview.iterrows()
+            for _, row in page_rows.iterrows()
         ],
     }
 
@@ -428,7 +572,12 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/query":
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8"))
-                result = run_natural_query(data.get("query", ""))
+                result = run_natural_query(
+                    data.get("query", ""),
+                    context=data.get("context"),
+                    page=data.get("page", 1),
+                    page_size=data.get("pageSize", 10),
+                )
                 self.send_json(result)
             elif parsed.path == "/api/broadcast-report":
                 length = int(self.headers.get("Content-Length", "0"))

@@ -6,6 +6,15 @@ const state = {
   currentRows: [],
 };
 
+const naturalQueryState = {
+  context: null,
+  awaitingClarification: false,
+  clarificationRounds: 0,
+  page: 1,
+  pageSize: 10,
+  totalPages: 1,
+};
+
 const apiBase = "";
 const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "下单日期", "目标", "现状", "差距", "完成率", "进度"];
 const metricDepartments = ["小学", "初中", "高中"];
@@ -307,20 +316,188 @@ async function reloadDemoFile() {
   }
 }
 
-async function runNaturalQuery() {
-  const sample = "6月23日，out_wxst_wxstqt_1774944753086 的成单量是多少？";
-  const query = window.prompt("请输入查询问题", sample);
-  if (!query) return;
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function openNaturalQuery() {
+  const panel = document.getElementById("naturalQueryPanel");
+  panel.hidden = false;
+  document.getElementById("mainContent").classList.add("query-mode");
+  document.getElementById("naturalQueryInput").focus();
+}
+
+function closeNaturalQuery() {
+  document.getElementById("naturalQueryPanel").hidden = true;
+  document.getElementById("mainContent").classList.remove("query-mode");
+}
+
+function showQueryClarification(message) {
+  const clarification = document.getElementById("queryClarification");
+  document.getElementById("queryClarificationText").textContent = message;
+  clarification.hidden = false;
+  document.getElementById("queryResult").hidden = true;
+}
+
+function hideQueryClarification() {
+  const clarification = document.getElementById("queryClarification");
+  clarification.hidden = true;
+  document.getElementById("queryClarificationText").textContent = "";
+}
+
+function resetNaturalQueryConversation() {
+  naturalQueryState.context = null;
+  naturalQueryState.awaitingClarification = false;
+  naturalQueryState.clarificationRounds = 0;
+  naturalQueryState.page = 1;
+  hideQueryClarification();
+  document.getElementById("queryResult").hidden = true;
+  const input = document.getElementById("naturalQueryInput");
+  input.value = "";
+  input.placeholder = "例如：6月27日YZY渠道的进量";
+  input.focus();
+}
+
+function renderQueryPagination(result) {
+  naturalQueryState.page = result.page;
+  naturalQueryState.totalPages = result.totalPages;
+
+  document.getElementById("queryPreviousPage").disabled = result.page <= 1;
+  document.getElementById("queryNextPage").disabled = result.page >= result.totalPages;
+  document.getElementById("queryPageSummary").textContent =
+    `共 ${fmtNumber(result.matchedRows)} 条，第 ${result.page}/${result.totalPages} 页`;
+
+  const pageSet = new Set([1, result.totalPages, result.page - 1, result.page, result.page + 1]);
+  const pages = [...pageSet]
+    .filter(page => page >= 1 && page <= result.totalPages)
+    .sort((a, b) => a - b);
+  const container = document.getElementById("queryPageNumbers");
+  container.innerHTML = "";
+  pages.forEach((page, index) => {
+    if (index > 0 && page - pages[index - 1] > 1) {
+      const gap = document.createElement("span");
+      gap.textContent = "…";
+      container.appendChild(gap);
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = page;
+    button.dataset.queryPage = page;
+    button.classList.toggle("active", page === result.page);
+    button.setAttribute("aria-label", `第${page}页`);
+    container.appendChild(button);
+  });
+}
+
+function renderNaturalQueryResult(result) {
+  const conditions = result.conditions;
+  naturalQueryState.context = {
+    date: conditions.date,
+    last_from: conditions.last_from,
+    channel_name: conditions.channelName,
+    metric: conditions.metric,
+  };
+  naturalQueryState.awaitingClarification = false;
+  naturalQueryState.clarificationRounds = 0;
+
+  const conditionList = document.getElementById("queryConditionList");
+  conditionList.innerHTML = [
+    `日期：${conditions.date}`,
+    `渠道：${conditions.channelName}`,
+    `last_from：${conditions.last_from}`,
+    `指标：${conditions.metric}`,
+  ].map(value => `<span>${escapeHtml(value)}</span>`).join("");
+
+  document.getElementById("queryInterpretation").open = false;
+  document.getElementById("queryAnswer").textContent = result.answer;
+  document.getElementById("queryResult").hidden = false;
+  document.getElementById("naturalQueryInput").placeholder = "例如：6月27日YZY渠道的进量";
+
+  const tbody = document.getElementById("queryResultBody");
+  tbody.innerHTML = result.rows.length
+    ? result.rows.map(row => `
+      <tr>
+        <td>${escapeHtml(row["下单日期"])}</td>
+        <td>${escapeHtml(conditions.channelName)}</td>
+        <td>${escapeHtml(row.last_from)}</td>
+        <td>${escapeHtml(row["学部"])}</td>
+        <td>${escapeHtml(row["期次"])}</td>
+        <td>${escapeHtml(row["年级"])}</td>
+        <td>${escapeHtml(row["线索渠道二级分类"])}</td>
+        <td class="num">${escapeHtml(row["价体"])}</td>
+        <td class="num">${escapeHtml(row["成单量"])}</td>
+      </tr>
+    `).join("")
+    : '<tr><td colspan="9">没有匹配的查询明细</td></tr>';
+
+  renderQueryPagination(result);
+}
+
+async function requestNaturalQuery(query, page = 1) {
+  const submitButton = document.getElementById("naturalQuerySubmit");
+  submitButton.disabled = true;
   try {
     const result = await requestJson("/api/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({
+        query,
+        context: naturalQueryState.context,
+        page,
+        pageSize: naturalQueryState.pageSize,
+      }),
     });
-    toast(`${result.conditions.date}，${result.conditions.last_from} 的成单量是 ${result.total}，命中 ${result.matchedRows} 行`);
+
+    if (result.status === "needs_clarification") {
+      naturalQueryState.clarificationRounds += 1;
+      if (naturalQueryState.clarificationRounds > 2) {
+        naturalQueryState.context = null;
+        naturalQueryState.awaitingClarification = false;
+        showQueryClarification("信息仍不完整，请重新输入包含日期、渠道和指标的完整问题。");
+        return;
+      }
+      naturalQueryState.context = result.context;
+      naturalQueryState.awaitingClarification = true;
+      showQueryClarification(result.question);
+      const input = document.getElementById("naturalQueryInput");
+      input.value = "";
+      input.placeholder = result.question;
+      input.focus();
+      return;
+    }
+
+    hideQueryClarification();
+    renderNaturalQueryResult(result);
   } catch (error) {
-    toast(error.message);
+    showQueryClarification(error.message);
+  } finally {
+    submitButton.disabled = false;
   }
+}
+
+async function submitNaturalQuery() {
+  const input = document.getElementById("naturalQueryInput");
+  const query = input.value.trim();
+  if (!query) {
+    toast("请输入查询问题");
+    input.focus();
+    return;
+  }
+  if (!naturalQueryState.awaitingClarification) {
+    naturalQueryState.context = null;
+    naturalQueryState.clarificationRounds = 0;
+  }
+  await requestNaturalQuery(query, 1);
+}
+
+async function loadNaturalQueryPage(page) {
+  if (!naturalQueryState.context) return;
+  await requestNaturalQuery("", page);
 }
 
 async function broadcastReport(dept) {
@@ -365,7 +542,41 @@ function bindEvents() {
   document.getElementById("exportCurrent").addEventListener("click", exportCurrentRows);
   document.getElementById("downloadWorkbook").addEventListener("click", () => location.href = `${apiBase}/download/workbook`);
   document.getElementById("exportQuery").addEventListener("click", () => location.href = `${apiBase}/download/query`);
-  document.getElementById("naturalQueryButton").addEventListener("click", runNaturalQuery);
+  document.getElementById("naturalQueryButton").addEventListener("click", openNaturalQuery);
+  document.getElementById("closeNaturalQuery").addEventListener("click", closeNaturalQuery);
+  document.getElementById("restartNaturalQuery").addEventListener("click", resetNaturalQueryConversation);
+  document.getElementById("naturalQueryForm").addEventListener("submit", event => {
+    event.preventDefault();
+    submitNaturalQuery();
+  });
+  document.querySelectorAll("[data-query-example]").forEach(button => {
+    button.addEventListener("click", () => {
+      naturalQueryState.context = null;
+      naturalQueryState.awaitingClarification = false;
+      naturalQueryState.clarificationRounds = 0;
+      hideQueryClarification();
+      const input = document.getElementById("naturalQueryInput");
+      input.value = button.dataset.queryExample;
+      input.focus();
+    });
+  });
+  document.getElementById("queryPageSize").addEventListener("change", event => {
+    naturalQueryState.pageSize = Number(event.target.value);
+    loadNaturalQueryPage(1);
+  });
+  document.getElementById("queryPreviousPage").addEventListener("click", () => {
+    loadNaturalQueryPage(naturalQueryState.page - 1);
+  });
+  document.getElementById("queryNextPage").addEventListener("click", () => {
+    loadNaturalQueryPage(naturalQueryState.page + 1);
+  });
+  document.getElementById("queryPageNumbers").addEventListener("click", event => {
+    const button = event.target.closest("[data-query-page]");
+    if (button) loadNaturalQueryPage(Number(button.dataset.queryPage));
+  });
+  document.getElementById("downloadQueryResult").addEventListener("click", () => {
+    location.href = `${apiBase}/download/query`;
+  });
   document.getElementById("reportPrimary").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=primary`);
   document.getElementById("reportMiddle").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=middle`);
   document.getElementById("reportHigh").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=high`);

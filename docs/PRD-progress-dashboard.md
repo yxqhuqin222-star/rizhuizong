@@ -144,17 +144,22 @@ DingTalk broadcast note:
 
 Supported query:
 
-- Date + `last_from` + `成单量`.
+- Date + channel alias or `last_from` + `成单量` / `进量`.
+- Channel aliases are resolved through `config/channel_aliases.csv`.
+- When a required condition is missing, the page asks for one missing condition at a time instead of guessing.
+- Clarification is limited to two rounds and is stored only in the current page session.
 
 Example:
 
 - `6月23日，out_wxst_wxstqt_1774944753086 的成单量是多少？`
+- `YZY渠道的进量` → asks `你想查询哪个时间段的？` → `6月27日`.
 
 Output:
 
 - Sum of `成单量`.
 - Matched row count.
-- Exportable matching rows.
+- Paginated matching rows, defaulting to 10 rows per page with 10 / 20 / 50 options.
+- Exportable full matching rows.
 
 ### 7.3 Technology
 
@@ -173,7 +178,8 @@ No database, login, external API, or cloud service is required for V1.
 - Excel field names stay aligned with the confirmed Chinese names.
 - `target_time` remains the target-date field name.
 - Latest term is determined from the `target` table by the numeric suffix in `期次`, such as `暑_10 > 暑_9`.
-- Natural-language query V1 only needs the date + `last_from` pattern.
+- Natural-language query remains rule-based and does not use an external model.
+- Missing conditions are never inferred from defaults; the user must confirm them.
 
 ## 8. Release
 
