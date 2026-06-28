@@ -370,18 +370,67 @@ main.query-mode > #summary {
 
 .query-clarification {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20px;
   padding: 13px 20px;
   border-bottom: 1px solid #c8d7ef;
   background: var(--blue-weak);
   color: #18375f;
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .query-clarification[hidden] { display: none; }
+
+.query-conversation {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.query-conversation-turn {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: #35506f;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.query-conversation-turn.user {
+  color: #52667d;
+}
+
+.query-conversation-turn.current {
+  background: #d7e6fb;
+  color: #18375f;
+  font-weight: 700;
+}
+
+.query-conversation-role {
+  color: #73859a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 21px;
+}
+
+.query-conversation-turn.current .query-conversation-role {
+  color: #2f5f9d;
+}
+
+.query-conversation-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.query-clarification > .btn {
+  flex: 0 0 auto;
+}
 
 .query-interpretation {
   border-bottom: 1px solid var(--line);
@@ -706,6 +755,15 @@ td.num, th.num { text-align: right; }
 
 @media (max-width: 680px) {
   .natural-query-compose { grid-template-columns: 1fr; }
+  .query-clarification {
+    flex-direction: column;
+  }
+  .query-conversation {
+    width: 100%;
+  }
+  .query-clarification > .btn {
+    align-self: flex-end;
+  }
   .query-result-head {
     align-items: flex-start;
     flex-direction: column;

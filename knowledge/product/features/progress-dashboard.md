@@ -27,7 +27,14 @@ The user needs to check daily progress against targets quickly after uploading a
 - User can send primary, middle, and high school daily progress broadcast images to the configured DingTalk group robot.
 - Date + `last_from` query returns the correct `成单量`.
 - Channel aliases such as `YZY` resolve to their configured `last_from`.
-- Missing query conditions trigger at most two focused clarification rounds and never use guessed defaults.
+- Natural-language queries default to `成单量` and do not ask the user to confirm the metric.
+- Relative dates such as `昨天` resolve from the current date.
+- `LLM9.9` resolves to `线索渠道二级分类 = LLM外呼` and `价体 = 990`.
+- Natural-language query vocabulary is built from the combined field values of `demo` and `target`; new values do not require parser code changes.
+- Shared dimensions from both tables can be combined in one query, while `成单量` remains sourced from `demo` and `目标` remains sourced from `target`.
+- Phrases such as `小初高各学部` or `三个学部分别` return a per-department breakdown plus the combined total.
+- Missing date or business-scope conditions trigger at most two focused clarification rounds and never use guessed defaults.
+- Multi-round clarification keeps the original query, prior questions, and user answers visible until the query completes or restarts.
 - Query details paginate at 10 rows by default with 10 / 20 / 50 row options.
 
 ## Daily Broadcast Field Mapping

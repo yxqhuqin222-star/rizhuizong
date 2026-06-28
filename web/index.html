@@ -97,8 +97,14 @@
           </div>
         </form>
 
-        <div class="query-clarification" id="queryClarification" hidden aria-live="polite">
-          <span id="queryClarificationText"></span>
+        <div class="query-clarification" id="queryClarification" hidden>
+          <div
+            class="query-conversation"
+            id="queryConversationHistory"
+            role="log"
+            aria-live="polite"
+            aria-label="查询确认记录"
+          ></div>
           <button class="btn" id="restartNaturalQuery" type="button">重新提问</button>
         </div>
 
@@ -132,17 +138,7 @@
           <div class="table-wrap query-table-wrap">
             <table>
               <thead>
-                <tr>
-                  <th>下单日期</th>
-                  <th>渠道名称</th>
-                  <th>last_from</th>
-                  <th>学部</th>
-                  <th>期次</th>
-                  <th>年级</th>
-                  <th>渠道</th>
-                  <th class="num">价体</th>
-                  <th class="num">成单量</th>
-                </tr>
+                <tr id="queryResultHead"></tr>
               </thead>
               <tbody id="queryResultBody"></tbody>
             </table>

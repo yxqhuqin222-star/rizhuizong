@@ -10,6 +10,7 @@ const naturalQueryState = {
   context: null,
   awaitingClarification: false,
   clarificationRounds: 0,
+  conversation: [],
   page: 1,
   pageSize: 10,
   totalPages: 1,
@@ -337,9 +338,41 @@ function closeNaturalQuery() {
   document.getElementById("mainContent").classList.remove("query-mode");
 }
 
-function showQueryClarification(message) {
+function renderQueryConversation() {
+  const history = document.getElementById("queryConversationHistory");
+  history.innerHTML = "";
+  naturalQueryState.conversation.forEach((turn, index) => {
+    const row = document.createElement("div");
+    row.className = `query-conversation-turn ${turn.role}`;
+    if (
+      naturalQueryState.awaitingClarification
+      && turn.role === "assistant"
+      && index === naturalQueryState.conversation.length - 1
+    ) {
+      row.classList.add("current");
+    }
+
+    const label = document.createElement("span");
+    label.className = "query-conversation-role";
+    label.textContent = turn.role === "user" ? "你" : "系统";
+
+    const message = document.createElement("span");
+    message.className = "query-conversation-message";
+    message.textContent = turn.message;
+
+    row.append(label, message);
+    history.appendChild(row);
+  });
+}
+
+function appendQueryConversationTurn(role, message) {
+  naturalQueryState.conversation.push({ role, message });
+  renderQueryConversation();
+}
+
+function showQueryClarification(message, role = "assistant") {
   const clarification = document.getElementById("queryClarification");
-  document.getElementById("queryClarificationText").textContent = message;
+  appendQueryConversationTurn(role, message);
   clarification.hidden = false;
   document.getElementById("queryResult").hidden = true;
 }
@@ -347,14 +380,15 @@ function showQueryClarification(message) {
 function hideQueryClarification() {
   const clarification = document.getElementById("queryClarification");
   clarification.hidden = true;
-  document.getElementById("queryClarificationText").textContent = "";
 }
 
 function resetNaturalQueryConversation() {
   naturalQueryState.context = null;
   naturalQueryState.awaitingClarification = false;
   naturalQueryState.clarificationRounds = 0;
+  naturalQueryState.conversation = [];
   naturalQueryState.page = 1;
+  renderQueryConversation();
   hideQueryClarification();
   document.getElementById("queryResult").hidden = true;
   const input = document.getElementById("naturalQueryInput");
@@ -400,40 +434,48 @@ function renderNaturalQueryResult(result) {
     date: conditions.date,
     last_from: conditions.last_from,
     channel_name: conditions.channelName,
+    channel_field: conditions.channel_field,
+    channel_value: conditions.channel_value,
+    payment: conditions.payment,
     metric: conditions.metric,
+    filters: conditions.filters,
+    group_by: conditions.groupBy,
   };
   naturalQueryState.awaitingClarification = false;
   naturalQueryState.clarificationRounds = 0;
 
   const conditionList = document.getElementById("queryConditionList");
-  conditionList.innerHTML = [
-    `日期：${conditions.date}`,
-    `渠道：${conditions.channelName}`,
-    `last_from：${conditions.last_from}`,
-    `指标：${conditions.metric}`,
-  ].map(value => `<span>${escapeHtml(value)}</span>`).join("");
+  const conditionValues = [];
+  if (conditions.date) conditionValues.push(`日期：${conditions.date}`);
+  Object.entries(conditions.filters || {}).forEach(([field, value]) => {
+    conditionValues.push(`${field}：${Array.isArray(value) ? value.join("、") : value}`);
+  });
+  if (conditions.last_from) conditionValues.push(`last_from：${conditions.last_from}`);
+  conditionValues.push(`指标：${conditions.metric}`);
+  conditionList.innerHTML = conditionValues
+    .map(value => `<span>${escapeHtml(value)}</span>`)
+    .join("");
 
   document.getElementById("queryInterpretation").open = false;
   document.getElementById("queryAnswer").textContent = result.answer;
   document.getElementById("queryResult").hidden = false;
   document.getElementById("naturalQueryInput").placeholder = "例如：6月27日YZY渠道的进量";
 
+  const numericColumns = new Set(["价体", "成单量", "目标"]);
+  document.getElementById("queryResultHead").innerHTML = result.columns
+    .map(column => `<th class="${numericColumns.has(column) ? "num" : ""}">${escapeHtml(column)}</th>`)
+    .join("");
+
   const tbody = document.getElementById("queryResultBody");
   tbody.innerHTML = result.rows.length
     ? result.rows.map(row => `
       <tr>
-        <td>${escapeHtml(row["下单日期"])}</td>
-        <td>${escapeHtml(conditions.channelName)}</td>
-        <td>${escapeHtml(row.last_from)}</td>
-        <td>${escapeHtml(row["学部"])}</td>
-        <td>${escapeHtml(row["期次"])}</td>
-        <td>${escapeHtml(row["年级"])}</td>
-        <td>${escapeHtml(row["线索渠道二级分类"])}</td>
-        <td class="num">${escapeHtml(row["价体"])}</td>
-        <td class="num">${escapeHtml(row["成单量"])}</td>
+        ${result.columns.map(column => `
+          <td class="${numericColumns.has(column) ? "num" : ""}">${escapeHtml(row[column])}</td>
+        `).join("")}
       </tr>
     `).join("")
-    : '<tr><td colspan="9">没有匹配的查询明细</td></tr>';
+    : `<tr><td colspan="${result.columns.length}">没有匹配的查询明细</td></tr>`;
 
   renderQueryPagination(result);
 }
@@ -458,7 +500,7 @@ async function requestNaturalQuery(query, page = 1) {
       if (naturalQueryState.clarificationRounds > 2) {
         naturalQueryState.context = null;
         naturalQueryState.awaitingClarification = false;
-        showQueryClarification("信息仍不完整，请重新输入包含日期、渠道和指标的完整问题。");
+        showQueryClarification("信息仍不完整，请重新输入包含日期和渠道的完整问题。");
         return;
       }
       naturalQueryState.context = result.context;
@@ -491,7 +533,10 @@ async function submitNaturalQuery() {
   if (!naturalQueryState.awaitingClarification) {
     naturalQueryState.context = null;
     naturalQueryState.clarificationRounds = 0;
+    naturalQueryState.conversation = [];
   }
+  naturalQueryState.awaitingClarification = false;
+  appendQueryConversationTurn("user", query);
   await requestNaturalQuery(query, 1);
 }
 
@@ -554,6 +599,8 @@ function bindEvents() {
       naturalQueryState.context = null;
       naturalQueryState.awaitingClarification = false;
       naturalQueryState.clarificationRounds = 0;
+      naturalQueryState.conversation = [];
+      renderQueryConversation();
       hideQueryClarification();
       const input = document.getElementById("naturalQueryInput");
       input.value = button.dataset.queryExample;
