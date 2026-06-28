@@ -2,12 +2,12 @@ const state = {
   allRows: [],
   latestRows: [],
   scope: "latest",
-  chip: "fast",
+  chip: "all",
   currentRows: [],
 };
 
 const apiBase = "";
-const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "目标", "现状", "差距", "完成率", "进度"];
+const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "下单日期", "目标", "现状", "差距", "完成率", "进度"];
 const metricDepartments = ["小学", "初中", "高中"];
 
 function fmtNumber(value) {
@@ -203,13 +203,16 @@ function filteredRows() {
 }
 
 function render() {
+  document.getElementById("chipAll").textContent = `${state.scope === "latest" ? "最新期次" : "全部期次"} ${activeRows().length}`;
   document.getElementById("chipFast").textContent = `快 ${activeRows().filter(row => rowStatus(row).text === "快").length}`;
   const rows = filteredRows();
   state.currentRows = rows;
   const department = document.getElementById("filterDepartment").value;
   document.getElementById("tableTitle").textContent = state.chip === "behind"
     ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
-    : `${department ? `${department} · ` : ""}快项明细（${rows.length}）`;
+    : state.chip === "fast"
+      ? `${department ? `${department} · ` : ""}快项明细（${rows.length}）`
+      : `${department ? `${department} · ` : ""}${state.scope === "latest" ? "最新期次" : "全部期次"}明细（${rows.length}）`;
   const tbody = document.getElementById("summaryBody");
   tbody.innerHTML = "";
 
@@ -223,6 +226,7 @@ function render() {
       <td class="num">${row["价体"] ?? ""}</td>
       <td>${row["年级"] ?? ""}</td>
       <td>${row["target_time"] ?? ""}</td>
+      <td>${row["下单日期"] ?? ""}</td>
       <td class="num">${fmtNumber(row["目标"])}</td>
       <td class="num">${fmtNumber(row["现状"])}</td>
       <td class="num">${fmtNumber(row["差距"])}</td>
@@ -374,9 +378,9 @@ function bindEvents() {
 
 function toggleScope() {
   state.scope = state.scope === "latest" ? "all" : "latest";
-  state.chip = "fast";
+  state.chip = "all";
   document.querySelectorAll(".chip").forEach(el => el.classList.remove("active"));
-  document.querySelector('[data-chip="fast"]').classList.add("active");
+  document.querySelector('[data-chip="all"]').classList.add("active");
   document.getElementById("tableTitle").textContent = state.scope === "latest" ? "最新期次明细" : "全部期次明细";
   document.getElementById("toggleScopeButton").textContent = state.scope === "latest" ? "切换到全部期次" : "切换到最新期次";
   buildFilters();

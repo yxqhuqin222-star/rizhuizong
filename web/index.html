@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>进度监控</title>
-  <link rel="icon" type="image/png" href="./favicon.png">
-  <link rel="shortcut icon" href="./favicon.ico">
+  <link rel="icon" type="image/png" href="./favicon.png?v=20260628-1">
+  <link rel="shortcut icon" href="./favicon.ico?v=20260628-1">
   <link rel="stylesheet" href="./styles.css?v=20260626-2">
 </head>
 <body>
@@ -126,7 +126,8 @@
         </div>
 
         <div class="chips">
-          <button class="chip active" data-chip="fast" id="chipFast">快</button>
+          <button class="chip active" data-chip="all" id="chipAll">最新期次</button>
+          <button class="chip" data-chip="fast" id="chipFast">快</button>
           <button class="chip" data-chip="behind" id="chipBehind">落后进度</button>
         </div>
 
@@ -140,6 +141,7 @@
                 <th class="num">价体</th>
                 <th>年级</th>
                 <th>target_time</th>
+                <th>下单日期</th>
                 <th class="num">目标</th>
                 <th class="num">现状</th>
                 <th class="num">差距</th>
@@ -156,6 +158,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=20260627-1"></script>
+  <script src="./app.js?v=20260628-2"></script>
 </body>
 </html>
