@@ -2,7 +2,7 @@ const state = {
   allRows: [],
   latestRows: [],
   scope: "latest",
-  chip: "all",
+  chip: "fast",
   currentRows: [],
 };
 
@@ -129,7 +129,6 @@ function renderDepartmentMetrics() {
 
 function renderMetrics(metrics) {
   renderDepartmentMetrics();
-  document.getElementById("chipAll").textContent = `${state.scope === "latest" ? "最新期次" : "全部期次"} ${metrics.row_count}`;
   document.getElementById("chipBehind").textContent = `落后进度 ${metrics.behind_count}`;
 }
 
@@ -198,17 +197,19 @@ function filteredRows() {
       if (!haystack.includes(keyword)) return false;
     }
     if (state.chip === "behind" && !isBehindProgress(row)) return false;
+    if (state.chip === "fast" && rowStatus(row).text !== "快") return false;
     return true;
   });
 }
 
 function render() {
+  document.getElementById("chipFast").textContent = `快 ${activeRows().filter(row => rowStatus(row).text === "快").length}`;
   const rows = filteredRows();
   state.currentRows = rows;
   const department = document.getElementById("filterDepartment").value;
   document.getElementById("tableTitle").textContent = state.chip === "behind"
     ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
-    : state.scope === "latest" ? "最新期次明细" : "全部期次明细";
+    : `${department ? `${department} · ` : ""}快项明细（${rows.length}）`;
   const tbody = document.getElementById("summaryBody");
   tbody.innerHTML = "";
 
@@ -373,9 +374,9 @@ function bindEvents() {
 
 function toggleScope() {
   state.scope = state.scope === "latest" ? "all" : "latest";
-  state.chip = "all";
+  state.chip = "fast";
   document.querySelectorAll(".chip").forEach(el => el.classList.remove("active"));
-  document.querySelector('[data-chip="all"]').classList.add("active");
+  document.querySelector('[data-chip="fast"]').classList.add("active");
   document.getElementById("tableTitle").textContent = state.scope === "latest" ? "最新期次明细" : "全部期次明细";
   document.getElementById("toggleScopeButton").textContent = state.scope === "latest" ? "切换到全部期次" : "切换到最新期次";
   buildFilters();

@@ -368,8 +368,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/state":
                 self.send_json(state_payload())
             elif path == "/favicon.ico":
-                self.send_response(204)
-                self.end_headers()
+                self.send_file(WEB_DIR / "favicon.ico", "image/x-icon")
+            elif path == "/favicon.png":
+                self.send_file(WEB_DIR / "favicon.png", "image/png")
             elif path == "/download/summary":
                 query = parse_qs(parsed.query)
                 scope = query.get("scope", ["latest"])[0]

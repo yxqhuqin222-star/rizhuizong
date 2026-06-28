@@ -19,6 +19,7 @@ The user needs to check daily progress against targets quickly after uploading a
 - Daily `demo` upload produces refreshed summary data.
 - Clicking `上传今日 demo` directly reloads the fixed project-root `tongji_demo.xlsx` without opening a file picker.
 - Default view shows latest-term data only.
+- The detail view defaults to the `快` quick filter; the former `最新期次` chip is not shown.
 - Latest-term overview shows separate primary, middle, and high school metric rows without an aggregate or self-study row.
 - Clicking a department's lagging-item count opens the existing latest-term detail view filtered to that department and rows whose completion rate is below progress; unopened rows remain labeled `未开单`.
 - User can export latest-term and full summary data.
