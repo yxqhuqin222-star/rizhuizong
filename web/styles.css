@@ -86,25 +86,6 @@ main {
   color: #354250;
 }
 
-.nav {
-  display: grid;
-  gap: 6px;
-}
-
-.nav a {
-  text-decoration: none;
-  color: #354250;
-  padding: 9px 10px;
-  border-radius: 7px;
-  font-size: 13px;
-}
-
-.nav a.active {
-  background: #e8edf4;
-  color: #132c4c;
-  font-weight: 700;
-}
-
 .upload {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -651,6 +632,10 @@ main.query-mode > #summary {
 .table-wrap {
   overflow: auto;
   max-height: 580px;
+}
+
+#summary .table-wrap {
+  max-height: none;
 }
 
 table {
