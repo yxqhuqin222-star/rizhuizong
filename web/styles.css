@@ -68,6 +68,65 @@ main {
   line-height: 1.2;
 }
 
+.natural-query-entry {
+  width: 100%;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #18375f;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(24, 55, 95, 0.16);
+  transition: transform 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.natural-query-entry:hover {
+  background: #214a7e;
+  box-shadow: 0 10px 22px rgba(24, 55, 95, 0.2);
+}
+
+.natural-query-entry:active {
+  transform: scale(0.98);
+}
+
+.natural-query-entry:focus-visible {
+  outline: 3px solid rgba(36, 84, 166, 0.28);
+  outline-offset: 2px;
+}
+
+.natural-query-entry-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.natural-query-entry-copy strong {
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.natural-query-entry-copy small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.natural-query-entry-arrow {
+  flex: 0 0 auto;
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 150ms ease;
+}
+
+.natural-query-entry:hover .natural-query-entry-arrow {
+  transform: translateX(3px);
+}
+
 .section small {
   margin: 3px 0 0;
   color: var(--muted);
