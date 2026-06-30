@@ -103,7 +103,7 @@ Measures:
 - `完成率 = 现状 / 目标`
 - `下单日期 = max(下单日期)` within each item, only as current-status date reference
 - `进量日期 = max(进量日期)` from target within each item
-- `进度 = (当前日期 - 进量日期) / 6`
+- `进度 = (当前日期 - 进量日期 - 1) / 6`
 - Progress is clamped to `0%` through `100%`.
 
 Rules:

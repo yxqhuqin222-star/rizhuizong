@@ -76,7 +76,7 @@ def calculate_progress(row):
     if pd.isna(row["target_time"]) or pd.isna(row["进量日期"]):
         return pd.NA
 
-    elapsed_days = (pd.Timestamp.today().normalize() - row["进量日期"]).days
+    elapsed_days = (pd.Timestamp.today().normalize() - row["进量日期"]).days - 1
     progress = elapsed_days / TOTAL_DAYS
     return max(0, min(progress, 1))
 
@@ -226,7 +226,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["总天数", TOTAL_DAYS],
             ["下单日期口径", "每个统计项下取 demo 最近一次下单日期，仅用于现状日期参考"],
             ["进量日期口径", "每个统计项下取 target 表中的进量日期"],
-            ["进度计算", "进度=(当前日期-进量日期)/总天数，并限制在 0%-100%"],
+            ["进度计算", "进度=(当前日期-进量日期-1)/总天数，并限制在 0%-100%"],
             ["播报图期次口径", "以 target 表中的期次为准，小学、初中、高中各自仅播报目标表里的最新一期次数据"],
             ["播报图渠道展示", "线索渠道二级分类 + 价体"],
             ["播报图招生目标", "目标"],
