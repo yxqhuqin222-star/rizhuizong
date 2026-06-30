@@ -4,7 +4,7 @@
 - Owner: User
 - Status: building
 - Priority: high
-- Last updated: 2026-06-28
+- Last updated: 2026-06-30
 
 ## Problem
 
@@ -17,6 +17,8 @@ The user needs to check daily progress against targets quickly after uploading a
 ## Success metrics
 
 - Daily `demo` upload produces refreshed summary data.
+- Summary regeneration also refreshes all broadcast images before reporting success.
+- The demo and target cards show the actual saved-file update time after initial load and upload.
 - Clicking `上传今日 demo` directly reloads the fixed project-root `tongji_demo.xlsx` without opening a file picker.
 - Default view shows latest-term data only.
 - The detail view defaults to the `快` quick filter; the former `最新期次` chip is not shown.
@@ -24,6 +26,7 @@ The user needs to check daily progress against targets quickly after uploading a
 - Clicking a department's lagging-item count opens the existing latest-term detail view filtered to that department and rows whose completion rate is below progress; unopened rows remain labeled `未开单`.
 - User can export latest-term and full summary data.
 - User can export separate daily progress broadcast images for primary, middle, and high school views.
+- Broadcast-image downloads open in a new browser tab and keep the dashboard open.
 - User can send primary, middle, and high school daily progress broadcast images to the configured DingTalk group robot.
 - Date + `last_from` query returns the correct `成单量`.
 - Channel aliases such as `YZY` resolve to their configured `last_from`.

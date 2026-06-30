@@ -42,6 +42,10 @@ function uploadStatus(kind, type, message) {
   el.className = `upload-status show ${type}`;
 }
 
+function openReport(dept) {
+  window.open(`${apiBase}/download/report?dept=${dept}`, "_blank", "noopener,noreferrer");
+}
+
 async function requestJson(url, options) {
   const res = await fetch(`${apiBase}${url}`, options);
   const text = await res.text();
@@ -59,12 +63,10 @@ async function requestJson(url, options) {
 
 async function loadState() {
   try {
-    const response = await fetch("/outputs/tongji_summary/summary_payload.json");
-    if (!response.ok) throw new Error("无法读取数据文件");
-    const data = await response.json();
-    state.allRows = rowsFromPayload(data.summary);
-    state.latestRows = rowsFromPayload(data.latest_summary);
-    renderFileInfo({ demo: { name: "tongji_demo.xlsx", updated_at: "已内置" }, target: { name: "tongji_target.xlsx", updated_at: "已内置" } });
+    const data = await requestJson("/api/state");
+    state.allRows = data.summary;
+    state.latestRows = data.latestSummary;
+    renderFileInfo(data.files);
     renderMetrics(data.metrics.latest);
     buildFilters();
     render();
@@ -624,10 +626,10 @@ function bindEvents() {
   document.getElementById("downloadQueryResult").addEventListener("click", () => {
     location.href = `${apiBase}/download/query`;
   });
-  document.getElementById("reportPrimary").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=primary`);
-  document.getElementById("reportMiddle").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=middle`);
-  document.getElementById("reportHigh").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=high`);
-  document.getElementById("reportLec1").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=lec1`);
+  document.getElementById("reportPrimary").addEventListener("click", () => openReport("primary"));
+  document.getElementById("reportMiddle").addEventListener("click", () => openReport("middle"));
+  document.getElementById("reportHigh").addEventListener("click", () => openReport("high"));
+  document.getElementById("reportLec1").addEventListener("click", () => openReport("lec1"));
   document.getElementById("broadcastPrimary").addEventListener("click", () => broadcastReport("primary"));
   document.getElementById("broadcastMiddle").addEventListener("click", () => broadcastReport("middle"));
   document.getElementById("broadcastHigh").addEventListener("click", () => broadcastReport("high"));

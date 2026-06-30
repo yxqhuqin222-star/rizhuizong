@@ -99,6 +99,7 @@ def rebuild_outputs():
     summary, payload = summary_module.rebuild(DEMO_PATH, TARGET_PATH, OUTPUT_DIR)
     if NODE_BIN.exists():
         subprocess.run([str(NODE_BIN), str(WORKBOOK_SCRIPT)], cwd=OUTPUT_DIR, check=True)
+    ensure_daily_report_images()
     return summary, payload
 
 
@@ -116,7 +117,13 @@ def ensure_daily_report_images():
 
 
 def ensure_report_image_current(image_path):
-    source_paths = (DEMO_PATH, TARGET_PATH, REPORT_SCRIPT, REPORT_EXPORT_SCRIPT)
+    source_paths = (
+        DEMO_PATH,
+        TARGET_PATH,
+        OUTPUT_DIR / "tongji_summary_current.xlsx",
+        REPORT_SCRIPT,
+        REPORT_EXPORT_SCRIPT,
+    )
     latest_source_mtime = max(path.stat().st_mtime for path in source_paths)
     needs_refresh = (
         not image_path.exists()
