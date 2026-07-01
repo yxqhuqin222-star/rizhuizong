@@ -1,15 +1,5 @@
-# Decisions Index
+# 架构决策
 
-> Append-only log. Filename: `YYYY-MM-DD-<slug>.md`. Schema in [_SCHEMA.md](./_SCHEMA.md).
+只记录仍值得追溯、且会约束后续实现方式的决定。
 
-## Pending
-<!-- Decisions opened but not yet resolved. Auto-maintained from files with status: pending. Decision debt — older than 14 days, high blocker impact, or approaching deadline → surface in maintenance. -->
-
-## Recently decided
-<!-- Last 30 days. Each links to the file. -->
-
-## Superseded
-<!-- Decisions reversed by a later decision. Both stay in the log. -->
-
-## TODO
-PM-fillable section is per-decision (filled in each `YYYY-MM-DD-<slug>.md` file), not here.
+- [2026-06-25 — V1 采用本地文件型看板](./2026-06-25-local-file-dashboard.md)

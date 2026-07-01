@@ -99,6 +99,4 @@
 ### Related Files
 
 - PRD: [PRD-progress-dashboard.md](./PRD-progress-dashboard.md)
-- Development plan: [development-plan.md](./development-plan.md)
-- Feature record: [progress-dashboard.md](../knowledge/product/features/progress-dashboard.md)
 - Architecture decision: [2026-06-25-local-file-dashboard.md](../decisions/2026-06-25-local-file-dashboard.md)
