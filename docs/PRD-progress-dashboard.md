@@ -132,7 +132,7 @@ Daily progress broadcast field mapping:
 - Scope: only each department's latest `期次` from the `target` table; historical terms and demo-only newer terms are not shown in broadcast images.
 - `渠道展示 = 线索渠道二级分类 + 价体`
 - `招生目标 = 目标`
-- `剩余天数 = 总天数 - (target_time - 进量日期)`
+- `剩余天数 = 总天数 - (target_time - 进量日期 - 1)`
 - `状态` uses the same classification as the dashboard.
 
 DingTalk broadcast note:

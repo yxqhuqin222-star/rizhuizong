@@ -92,10 +92,13 @@ def status_text(target, current, completion, time_progress):
     return "正常"
 
 
-def elapsed_days(time_progress):
-    if pd.isna(time_progress):
+def remaining_days(target_time, intake_date):
+    if pd.isna(target_time) or pd.isna(intake_date):
         return "--"
-    return str(max(0, round(float(time_progress) * TOTAL_DAYS)))
+    elapsed_days = (
+        pd.Timestamp(target_time).normalize() - pd.Timestamp(intake_date).normalize()
+    ).days - 1
+    return str(max(0, TOTAL_DAYS - elapsed_days))
 
 
 def normalize_summary_frame(df):
@@ -111,7 +114,10 @@ def enrich(df):
     data = df.copy()
     data["渠道展示"] = data.apply(channel_label, axis=1)
     data["进度GAP"] = data.apply(lambda row: gap_abs(row["完成率"], row["进度"]), axis=1)
-    data["剩余天数"] = data["进度"].apply(elapsed_days)
+    data["剩余天数"] = data.apply(
+        lambda row: remaining_days(row["target_time"], row["进量日期"]),
+        axis=1,
+    )
     return data
 
 
@@ -122,6 +128,7 @@ def aggregate_channel(df):
             招生目标=("目标", "sum"),
             成单量=("现状", "sum"),
             target_time=("target_time", "max"),
+            进量日期=("进量日期", "max"),
             进度=("进度", "max"),
         )
     )
@@ -135,7 +142,10 @@ def aggregate_channel(df):
         axis=1,
     )
     grouped["进度GAP"] = grouped.apply(lambda row: gap_abs(row["招生进度"], row["进度"]), axis=1)
-    grouped["剩余天数"] = grouped["进度"].apply(elapsed_days)
+    grouped["剩余天数"] = grouped.apply(
+        lambda row: remaining_days(row["target_time"], row["进量日期"]),
+        axis=1,
+    )
     return grouped.sort_values(["期次", "渠道展示"], kind="stable")
 
 
@@ -145,6 +155,8 @@ def aggregate_grade(df):
         .agg(
             招生目标=("目标", "sum"),
             成单量=("现状", "sum"),
+            target_time=("target_time", "max"),
+            进量日期=("进量日期", "max"),
             进度=("进度", "max"),
         )
     )
@@ -158,7 +170,10 @@ def aggregate_grade(df):
         axis=1,
     )
     grouped["进度GAP"] = grouped.apply(lambda row: gap_abs(row["招生进度"], row["进度"]), axis=1)
-    grouped["剩余天数"] = grouped["进度"].apply(elapsed_days)
+    grouped["剩余天数"] = grouped.apply(
+        lambda row: remaining_days(row["target_time"], row["进量日期"]),
+        axis=1,
+    )
     grouped["年级顺序"] = grouped["年级"].map(GRADE_ORDER).fillna(len(GRADE_ORDER) + 1)
     return (
         grouped.sort_values(["期次", "渠道展示", "年级顺序", "年级"], kind="stable")
@@ -214,6 +229,8 @@ def total_row(df, span_cols):
     time_progress = df["进度"].dropna().max() if df["进度"].notna().any() else pd.NA
     gap = current - target
     progress_gap = gap_abs(progress, time_progress)
+    target_time = df["target_time"].dropna().max() if df["target_time"].notna().any() else pd.NaT
+    intake_date = df["进量日期"].dropna().max() if df["进量日期"].notna().any() else pd.NaT
     return {
         "期次": "总计",
         "渠道展示": "--",
@@ -225,7 +242,7 @@ def total_row(df, span_cols):
         "进度": time_progress,
         "状态": status_text(target, current, progress, time_progress),
         "进度GAP": progress_gap,
-        "剩余天数": elapsed_days(time_progress),
+        "剩余天数": remaining_days(target_time, intake_date),
         "_span_cols": span_cols,
     }
 
