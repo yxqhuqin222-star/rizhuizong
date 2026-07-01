@@ -55,6 +55,12 @@ def pct_text(value):
     return f"{value * 100:.0f}%"
 
 
+def signed_pct_text(value):
+    if pd.isna(value):
+        return "--"
+    return f"{float(value) * 100:.0f}%"
+
+
 def int_text(value):
     if pd.isna(value):
         return "--"
@@ -69,10 +75,12 @@ def channel_label(row):
     return f"{channel}-{int(payment)}元"
 
 
-def gap_abs(progress, time_progress):
-    if pd.isna(progress) or pd.isna(time_progress):
+def progress_gap(progress, time_progress):
+    displayed_progress = pct(progress)
+    displayed_time_progress = pct(time_progress)
+    if displayed_progress is None or displayed_time_progress is None:
         return None
-    return abs(float(progress) - float(time_progress))
+    return displayed_time_progress - displayed_progress
 
 
 def status_text(target, current, completion, time_progress):
@@ -113,7 +121,7 @@ def normalize_summary_frame(df):
 def enrich(df):
     data = df.copy()
     data["渠道展示"] = data.apply(channel_label, axis=1)
-    data["进度GAP"] = data.apply(lambda row: gap_abs(row["完成率"], row["进度"]), axis=1)
+    data["进度GAP"] = data.apply(lambda row: progress_gap(row["完成率"], row["进度"]), axis=1)
     data["剩余天数"] = data.apply(
         lambda row: remaining_days(row["target_time"], row["进量日期"]),
         axis=1,
@@ -141,7 +149,10 @@ def aggregate_channel(df):
         lambda row: status_text(row["招生目标"], row["成单量"], row["招生进度"], row["进度"]),
         axis=1,
     )
-    grouped["进度GAP"] = grouped.apply(lambda row: gap_abs(row["招生进度"], row["进度"]), axis=1)
+    grouped["进度GAP"] = grouped.apply(
+        lambda row: progress_gap(row["招生进度"], row["进度"]),
+        axis=1,
+    )
     grouped["剩余天数"] = grouped.apply(
         lambda row: remaining_days(row["target_time"], row["进量日期"]),
         axis=1,
@@ -169,7 +180,10 @@ def aggregate_grade(df):
         lambda row: status_text(row["招生目标"], row["成单量"], row["招生进度"], row["进度"]),
         axis=1,
     )
-    grouped["进度GAP"] = grouped.apply(lambda row: gap_abs(row["招生进度"], row["进度"]), axis=1)
+    grouped["进度GAP"] = grouped.apply(
+        lambda row: progress_gap(row["招生进度"], row["进度"]),
+        axis=1,
+    )
     grouped["剩余天数"] = grouped.apply(
         lambda row: remaining_days(row["target_time"], row["进量日期"]),
         axis=1,
@@ -203,7 +217,8 @@ def render_rows(rows, columns):
             elif col == "时间进度":
                 cells.append(f'<td>{bar(row.get("进度"), "#ff8a00")}</td>')
             elif col == "进度GAP":
-                cells.append(f'<td>{bar(value, "#5b8ff9", pct_text(value))}</td>')
+                bar_value = abs(value) if not pd.isna(value) else value
+                cells.append(f'<td>{bar(bar_value, "#5b8ff9", signed_pct_text(value))}</td>')
             elif col == "状态":
                 text = "--" if pd.isna(value) else html.escape(str(value))
                 cls = {
@@ -228,7 +243,7 @@ def total_row(df, span_cols):
     progress = current / target if target else pd.NA
     time_progress = df["进度"].dropna().max() if df["进度"].notna().any() else pd.NA
     gap = current - target
-    progress_gap = gap_abs(progress, time_progress)
+    progress_gap_value = progress_gap(progress, time_progress)
     target_time = df["target_time"].dropna().max() if df["target_time"].notna().any() else pd.NaT
     intake_date = df["进量日期"].dropna().max() if df["进量日期"].notna().any() else pd.NaT
     return {
@@ -241,7 +256,7 @@ def total_row(df, span_cols):
         "招生进度": progress,
         "进度": time_progress,
         "状态": status_text(target, current, progress, time_progress),
-        "进度GAP": progress_gap,
+        "进度GAP": progress_gap_value,
         "剩余天数": remaining_days(target_time, intake_date),
         "_span_cols": span_cols,
     }

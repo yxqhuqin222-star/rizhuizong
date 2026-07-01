@@ -46,13 +46,30 @@ function openReport(dept) {
   window.open(`${apiBase}/download/report?dept=${dept}`, "_blank", "noopener,noreferrer");
 }
 
-async function requestJson(url, options) {
-  const res = await fetch(`${apiBase}${url}`, options);
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function requestJson(url, options, retryOnRestart = false) {
+  let res;
+  try {
+    res = await fetch(`${apiBase}${url}`, options);
+  } catch (error) {
+    if (retryOnRestart) {
+      await wait(1200);
+      return requestJson(url, options, false);
+    }
+    throw error;
+  }
   const text = await res.text();
   let data;
   try {
     data = JSON.parse(text);
   } catch {
+    if (retryOnRestart) {
+      await wait(1200);
+      return requestJson(url, options, false);
+    }
     throw new Error("服务返回的不是 JSON，请确认本地看板服务已启动并刷新页面。");
   }
   if (!res.ok || data.error) {
@@ -264,16 +281,14 @@ function showBehindDetails(department) {
   document.getElementById("summary").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function uploadFile(kind, file) {
-  const form = new FormData();
-  form.append(kind, file);
+async function reloadFixedFile(kind) {
   const button = document.getElementById(`${kind}UploadButton`);
   const label = kind === "demo" ? "demo" : "target";
-  toast("正在上传并重算...");
-  uploadStatus(kind, "pending", `正在上传 ${label} 并重算 summary...`);
+  toast(`正在读取固定 ${label} 并重算...`);
+  uploadStatus(kind, "pending", `正在读取固定 ${label} 并重算 summary...`);
   button.disabled = true;
   try {
-    const data = await requestJson("/api/upload", { method: "POST", body: form });
+    const data = await requestJson(`/api/reload-${kind}`, { method: "POST" }, true);
     state.allRows = data.state.summary;
     state.latestRows = data.state.latestSummary;
     renderFileInfo(data.state.files);
@@ -282,37 +297,10 @@ async function uploadFile(kind, file) {
     render();
     const fileInfo = data.state.files[kind];
     const updatedAt = fileInfo?.updated_at ? `更新时间：${fileInfo.updated_at}` : "已完成重算";
-    uploadStatus(kind, "success", `${label} 上传成功，summary 已更新。${updatedAt}`);
-    toast("上传成功，summary 已更新");
+    uploadStatus(kind, "success", `${label} 读取成功，summary 已更新。${updatedAt}`);
+    toast(`${label} 读取成功，summary 已更新`);
   } catch (error) {
-    uploadStatus(kind, "error", `${label} 上传失败：${error.message}`);
-    toast(error.message);
-  } finally {
-    button.disabled = false;
-    document.getElementById(`${kind}File`).value = "";
-  }
-}
-
-async function reloadDemoFile() {
-  const button = document.getElementById("demoUploadButton");
-  toast("正在读取固定 demo 并重算...");
-  uploadStatus("demo", "pending", "正在读取固定 demo 并重算 summary...");
-  button.disabled = true;
-  try {
-    const data = await requestJson("/api/reload-demo", { method: "POST" });
-    state.allRows = data.state.summary;
-    state.latestRows = data.state.latestSummary;
-    renderFileInfo(data.state.files);
-    renderMetrics(data.state.metrics.latest);
-    buildFilters();
-    render();
-    const updatedAt = data.state.files.demo?.updated_at
-      ? `更新时间：${data.state.files.demo.updated_at}`
-      : "已完成重算";
-    uploadStatus("demo", "success", `demo 读取成功，summary 已更新。${updatedAt}`);
-    toast("demo 读取成功，summary 已更新");
-  } catch (error) {
-    uploadStatus("demo", "error", `demo 读取失败：${error.message}`);
+    uploadStatus(kind, "error", `${label} 读取失败：${error.message}`);
     toast(error.message);
   } finally {
     button.disabled = false;
@@ -564,9 +552,8 @@ async function broadcastReport(dept) {
 }
 
 function bindEvents() {
-  document.getElementById("demoUploadButton").addEventListener("click", reloadDemoFile);
-  document.getElementById("targetUploadButton").addEventListener("click", () => document.getElementById("targetFile").click());
-  document.getElementById("targetFile").addEventListener("change", event => event.target.files[0] && uploadFile("target", event.target.files[0]));
+  document.getElementById("demoUploadButton").addEventListener("click", () => reloadFixedFile("demo"));
+  document.getElementById("targetUploadButton").addEventListener("click", () => reloadFixedFile("target"));
 
   ["filterDepartment", "filterTerm", "filterChannel", "filterPayment", "filterOrderDate", "filterKeyword"].forEach(id => {
     document.getElementById(id).addEventListener("input", render);

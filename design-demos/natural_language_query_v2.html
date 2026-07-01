@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自然语言查询演示</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #6f7a86;
+      --line: #dfe5ec;
+      --blue: #2454a6;
+      --blue-dark: #18375f;
+      --blue-weak: #e9f0ff;
+      --green: #26734d;
+      --green-weak: #eaf7ef;
+      --red: #b5433b;
+      --shadow: 0 12px 32px rgba(23, 32, 42, 0.07);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select { font: inherit; }
+    button { touch-action: manipulation; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr);
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 22px 18px;
+      border-right: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-md);
+      background: var(--blue-dark);
+      color: white;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav a {
+      padding: 9px 10px;
+      border-radius: 7px;
+      color: #354250;
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    .nav a.active {
+      background: #e8edf4;
+      color: #132c4c;
+      font-weight: 700;
+    }
+
+    .side-section {
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .side-section h2 {
+      margin: 0 0 12px;
+      color: #354250;
+      font-size: 13px;
+    }
+
+    .side-section p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    main {
+      min-width: 0;
+      padding: 24px 28px 40px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -0.012em;
+      line-height: 1.25;
+    }
+
+    .topbar p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .btn {
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: white;
+      color: var(--ink);
+      cursor: pointer;
+      transition-property: transform, background-color, border-color, opacity;
+      transition-duration: 160ms;
+      transition-timing-function: ease;
+    }
+
+    .btn:hover { border-color: #bdc8d5; }
+    .btn:active { transform: scale(0.96); }
+    .btn:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(36, 84, 166, 0.2);
+      outline-offset: 2px;
+    }
+
+    .btn.primary {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: white;
+      font-weight: 700;
+    }
+
+    .btn.subtle { background: #f9fafb; }
+    .btn.small {
+      min-height: 34px;
+      padding: 0 11px;
+      font-size: 12px;
+    }
+
+    .query-panel {
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .query-head {
+      padding: 20px 22px 18px;
+      background: var(--blue-dark);
+      color: white;
+    }
+
+    .query-head label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .query-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+    }
+
+    .query-row input {
+      width: 100%;
+      min-height: 46px;
+      padding: 0 14px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: var(--radius-md);
+      background: white;
+      color: var(--ink);
+      font-size: 15px;
+    }
+
+    .query-row .btn {
+      min-height: 46px;
+      border-color: white;
+      background: white;
+      color: var(--blue-dark);
+      font-weight: 800;
+    }
+
+    .examples {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 14px 22px 17px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .examples span {
+      align-self: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .example {
+      min-height: 32px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 999px;
+      background: #edf1f6;
+      color: #354250;
+      cursor: pointer;
+      font-size: 12px;
+      transition-property: transform, background-color;
+      transition-duration: 160ms;
+    }
+
+    .example:hover { background: #e2e8f0; }
+    .example:active { transform: scale(0.96); }
+
+    .interpretation {
+      background: var(--blue-weak);
+    }
+
+    .interpretation summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 44px;
+      padding: 0 22px;
+      color: var(--blue-dark);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      list-style: none;
+    }
+
+    .interpretation summary::-webkit-details-marker { display: none; }
+
+    .interpretation summary::after {
+      content: "展开查看";
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .interpretation[open] summary::after { content: "收起"; }
+
+    .interpretation-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: 0 22px 15px;
+    }
+
+    .tokens {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .token {
+      padding: 5px 8px;
+      border-radius: var(--radius-sm);
+      background: white;
+      color: #354250;
+      font-size: 12px;
+      box-shadow: 0 1px 3px rgba(23, 32, 42, 0.1);
+    }
+
+    .interpretation .edit {
+      border: 0;
+      background: transparent;
+      color: var(--blue);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .result-area {
+      min-height: 470px;
+      padding: 22px;
+    }
+
+    .answer {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) repeat(2, minmax(140px, 0.65fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .answer-primary, .metric {
+      min-height: 112px;
+      padding: 18px;
+      border-radius: var(--radius-md);
+      background: #f8fafc;
+    }
+
+    .answer-primary {
+      background: var(--green-weak);
+    }
+
+    .answer-primary.is-error {
+      background: #fff0ee;
+    }
+
+    .answer-primary.is-error strong { color: var(--red); }
+    .answer-primary.is-error p { color: #80504c; }
+
+    .eyebrow {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .answer-primary strong {
+      display: block;
+      color: #174d33;
+      font-size: 25px;
+      letter-spacing: -0.012em;
+      line-height: 1.25;
+    }
+
+    .answer-primary p {
+      margin: 8px 0 0;
+      color: #4c6859;
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 29px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.022em;
+    }
+
+    .details-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+
+    .details-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .details-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .details-actions select {
+      min-height: 34px;
+      padding: 0 28px 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: white;
+      color: var(--ink);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      min-width: 920px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid rgba(23, 32, 42, 0.06);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f7f9fb;
+      color: #4f5d6b;
+      font-weight: 700;
+    }
+
+    th.num, td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f8faff; }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-top: 14px;
+    }
+
+    .page-summary {
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .page-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .page-btn {
+      min-width: 40px;
+      height: 40px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: white;
+      color: var(--ink);
+      cursor: pointer;
+      transition-property: transform, background-color, border-color;
+      transition-duration: 150ms;
+    }
+
+    .page-btn:active { transform: scale(0.96); }
+    .page-btn.active {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: white;
+      font-weight: 700;
+    }
+
+    .page-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.38;
+    }
+
+    .toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 10;
+      max-width: min(360px, calc(100vw - 48px));
+      padding: 12px 15px;
+      border-radius: var(--radius-md);
+      background: var(--blue-dark);
+      color: white;
+      font-size: 13px;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition-property: opacity, transform;
+      transition-duration: 180ms;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .result-area.refreshing {
+      opacity: 0.45;
+      transform: translateY(6px);
+    }
+
+    .result-area {
+      transition-property: opacity, transform;
+      transition-duration: 180ms;
+      transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      aside {
+        position: static;
+        width: 100%;
+        height: auto;
+        padding: 16px 18px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { margin-bottom: 12px; }
+      .nav { grid-template-columns: repeat(3, auto); justify-content: start; }
+      .side-section { display: none; }
+      main { padding: 20px 18px 32px; }
+    }
+
+    @media (max-width: 700px) {
+      .topbar { align-items: stretch; flex-direction: column; }
+      .topbar .btn { width: 100%; }
+      .query-row { grid-template-columns: 1fr; }
+      .interpretation-body { grid-template-columns: 1fr; }
+      .answer { grid-template-columns: 1fr 1fr; }
+      .answer-primary { grid-column: 1 / -1; }
+      .details-head { align-items: flex-start; flex-direction: column; }
+      .pagination { align-items: flex-start; flex-direction: column; }
+      .page-controls { max-width: 100%; flex-wrap: wrap; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="mark">日</div>
+        <div><h1>日追踪看板</h1></div>
+      </div>
+
+      <nav class="nav" aria-label="主要导航">
+        <a href="#">总览</a>
+        <a href="#">最新期次明细</a>
+        <a class="active" href="#">自然语言查询</a>
+      </nav>
+
+      <div class="side-section">
+        <h2>本次查询</h2>
+        <p>查询依据：tongji_demo.xlsx</p>
+        <p>数据更新：2026-06-27 09:32</p>
+        <p>“今天”按数据中的最新日期解释。</p>
+      </div>
+
+      <div class="side-section">
+        <h2>支持的问法</h2>
+        <p>可按日期、学部、期次、年级、渠道、价体和 last_from 查询成单量及进度指标。</p>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <h1>自然语言查询</h1>
+          <p>用一句话查询成交、进度和落后明细。</p>
+        </div>
+        <button class="btn subtle" id="backButton" type="button">返回进度监控</button>
+      </header>
+
+      <section class="query-panel" aria-label="自然语言查询工作区">
+        <div class="query-head">
+          <label for="queryInput">你想查询什么？</label>
+          <div class="query-row">
+            <input id="queryInput" value="6月27日小学各渠道的成单量是多少？" autocomplete="off">
+            <button class="btn" id="queryButton" type="button">开始查询</button>
+          </div>
+        </div>
+
+        <div class="examples" aria-label="示例问题">
+          <span>试试这样问：</span>
+          <button class="example" type="button">昨天小学成单量</button>
+          <button class="example" type="button">最新期次各学部完成率</button>
+          <button class="example" type="button">当前初中有哪些落后项</button>
+        </div>
+
+        <details class="interpretation" id="interpretationDetails">
+          <summary>查看系统理解</summary>
+          <div class="interpretation-body">
+            <div class="tokens" id="tokens">
+              <span class="token">日期：2026-06-27</span>
+              <span class="token">学部：小学</span>
+              <span class="token">指标：成单量</span>
+              <span class="token">分组：渠道</span>
+            </div>
+            <button class="edit" id="editQuery" type="button">修改问题</button>
+          </div>
+        </details>
+
+        <div class="result-area" id="resultArea">
+          <div class="answer">
+            <div class="answer-primary">
+              <span class="eyebrow">查询结论</span>
+              <strong id="answerTitle">6月27日，小学共成单 3,291 单</strong>
+              <p id="answerNote">LEC内测贡献最高，占当日小学成单量的 58.4%。</p>
+            </div>
+            <div class="metric">
+              <span class="eyebrow">命中明细</span>
+              <strong id="matchedCount">32</strong>
+            </div>
+            <div class="metric">
+              <span class="eyebrow" id="secondaryLabel">渠道数量</span>
+              <strong id="secondaryValue">5</strong>
+            </div>
+          </div>
+
+          <div class="details-head">
+            <h2>查询明细</h2>
+            <div class="details-actions">
+              <label for="pageSize">每页</label>
+              <select id="pageSize">
+                <option value="10" selected>10 条</option>
+                <option value="20">20 条</option>
+                <option value="50">50 条</option>
+              </select>
+              <button class="btn small" id="exportButton" type="button">导出全部32条</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>下单日期</th>
+                  <th>学部</th>
+                  <th>期次</th>
+                  <th>渠道</th>
+                  <th class="num">价体</th>
+                  <th>年级</th>
+                  <th class="num">成单量</th>
+                  <th>last_from</th>
+                </tr>
+              </thead>
+              <tbody id="resultBody"></tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <div class="page-summary" id="pageSummary"></div>
+            <div class="page-controls" id="pageControls" aria-label="查询结果分页"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const channels = ["LEC内测", "常规外呼", "外部微转-*", "LLM外呼", "AI托管"];
+    const grades = ["二年级", "三年级", "四年级", "五年级", "六年级"];
+    const prices = [100, 990, 2880, 990, 0];
+    const defaultRows = Array.from({ length: 32 }, (_, index) => ({
+      date: "2026-06-27",
+      department: "小学",
+      term: index < 27 ? "暑_8" : "暑_9",
+      channel: channels[index % channels.length],
+      price: prices[index % prices.length],
+      grade: grades[index % grades.length],
+      orders: [186, 142, 97, 64, 38, 202, 155, 113][index % 8],
+      lastFrom: `out_demo_${String(2606270000 + index).padStart(10, "0")}`
+    }));
+
+    const highSchoolLlmRows = [
+      ...Array.from({ length: 2 }, () => ({
+        date: "2026-06-27",
+        department: "高中",
+        term: "暑_10",
+        channel: "LLM外呼",
+        price: 990,
+        grade: "高一",
+        orders: 1,
+        lastFrom: "out_wxst_wxstqt_1721199322612"
+      })),
+      ...Array.from({ length: 348 }, () => ({
+        date: "2026-06-27",
+        department: "高中",
+        term: "暑_11",
+        channel: "LLM外呼",
+        price: 990,
+        grade: "高一",
+        orders: 1,
+        lastFrom: "out_wxst_wxstqt_1721199322612"
+      })),
+      ...Array.from({ length: 66 }, () => ({
+        date: "2026-06-27",
+        department: "高中",
+        term: "暑_11",
+        channel: "LLM外呼",
+        price: 990,
+        grade: "高二",
+        orders: 1,
+        lastFrom: "out_wxst_wxstqt_1721199322612"
+      }))
+    ];
+
+    let currentPage = 1;
+    let pageSize = 10;
+    let currentRows = defaultRows;
+
+    const resultBody = document.getElementById("resultBody");
+    const pageSummary = document.getElementById("pageSummary");
+    const pageControls = document.getElementById("pageControls");
+    const queryInput = document.getElementById("queryInput");
+    const resultArea = document.getElementById("resultArea");
+    const interpretationDetails = document.getElementById("interpretationDetails");
+    const tokens = document.getElementById("tokens");
+    const answerPrimary = document.querySelector(".answer-primary");
+    const answerTitle = document.getElementById("answerTitle");
+    const answerNote = document.getElementById("answerNote");
+    const matchedCount = document.getElementById("matchedCount");
+    const secondaryLabel = document.getElementById("secondaryLabel");
+    const secondaryValue = document.getElementById("secondaryValue");
+    const exportButton = document.getElementById("exportButton");
+
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("show");
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2200);
+    }
+
+    function renderRows() {
+      const totalPages = Math.max(1, Math.ceil(currentRows.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      const start = (currentPage - 1) * pageSize;
+      const visibleRows = currentRows.slice(start, start + pageSize);
+
+      resultBody.innerHTML = visibleRows.length ? visibleRows.map(row => `
+        <tr>
+          <td>${row.date}</td>
+          <td>${row.department}</td>
+          <td>${row.term}</td>
+          <td>${row.channel}</td>
+          <td class="num">${row.price.toLocaleString("zh-CN")}</td>
+          <td>${row.grade}</td>
+          <td class="num">${row.orders.toLocaleString("zh-CN")}</td>
+          <td>${row.lastFrom}</td>
+        </tr>
+      `).join("") : `
+        <tr>
+          <td colspan="8">没有可展示的查询明细</td>
+        </tr>
+      `;
+
+      const end = Math.min(start + pageSize, currentRows.length);
+      pageSummary.textContent = currentRows.length
+        ? `共 ${currentRows.length} 条，当前显示第 ${start + 1}–${end} 条，第 ${currentPage}/${totalPages} 页`
+        : "共 0 条";
+
+      const pageSet = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+      const pages = [...pageSet].filter(page => page >= 1 && page <= totalPages).sort((a, b) => a - b);
+      const numberedButtons = pages.map((page, index) => {
+        const gap = index > 0 && page - pages[index - 1] > 1 ? '<span aria-hidden="true">…</span>' : "";
+        return `${gap}<button class="page-btn ${page === currentPage ? "active" : ""}" data-page="${page}" type="button" aria-label="第${page}页">${page}</button>`;
+      }).join("");
+
+      pageControls.innerHTML = `
+        <button class="page-btn" data-action="previous" type="button" ${currentPage === 1 ? "disabled" : ""}>上一页</button>
+        ${numberedButtons}
+        <button class="page-btn" data-action="next" type="button" ${currentPage === totalPages ? "disabled" : ""}>下一页</button>
+      `;
+    }
+
+    function renderQueryState(state) {
+      currentRows = state.rows;
+      currentPage = 1;
+      answerPrimary.classList.toggle("is-error", Boolean(state.error));
+      answerTitle.textContent = state.title;
+      answerNote.textContent = state.note;
+      matchedCount.textContent = state.rows.length.toLocaleString("zh-CN");
+      secondaryLabel.textContent = state.secondaryLabel;
+      secondaryValue.textContent = state.secondaryValue;
+      tokens.innerHTML = state.tokens.map(token => `<span class="token">${token}</span>`).join("");
+      exportButton.textContent = `导出全部${state.rows.length}条`;
+      exportButton.disabled = state.rows.length === 0;
+      renderRows();
+    }
+
+    function parseDemoQuery(query) {
+      const normalized = query.toLowerCase().replace(/\s+/g, "");
+      const isHighSchoolLlm = /6[.月/-]27/.test(normalized)
+        && normalized.includes("高中")
+        && normalized.includes("llm")
+        && (normalized.includes("9.9") || normalized.includes("990"))
+        && (normalized.includes("进量") || normalized.includes("成单量"));
+
+      if (isHighSchoolLlm) {
+        return {
+          rows: highSchoolLlmRows,
+          title: "6月27日，高中 LLM外呼 990价体共进量 416 单",
+          note: "命中416条原始明细；暑_11为414单，暑_10为2单。",
+          secondaryLabel: "涉及期次",
+          secondaryValue: "2",
+          tokens: ["日期：2026-06-27", "学部：高中", "渠道：LLM外呼", "价体：990", "指标：成单量"]
+        };
+      }
+
+      const isDefaultQuery = normalized.includes("6月27日")
+        && normalized.includes("小学")
+        && normalized.includes("渠道")
+        && normalized.includes("成单量");
+
+      if (isDefaultQuery) {
+        return {
+          rows: defaultRows,
+          title: "6月27日，小学共成单 3,291 单",
+          note: "LEC内测贡献最高，占当日小学成单量的58.4%。",
+          secondaryLabel: "渠道数量",
+          secondaryValue: "5",
+          tokens: ["日期：2026-06-27", "学部：小学", "指标：成单量", "分组：渠道"]
+        };
+      }
+
+      return {
+        rows: [],
+        title: "暂时无法理解这条查询",
+        note: "请补充日期、学部、渠道、价体和指标，或使用页面中的示例问题。",
+        secondaryLabel: "识别状态",
+        secondaryValue: "需补充",
+        tokens: ["未识别到完整查询条件"],
+        error: true
+      };
+    }
+
+    function runQuery() {
+      const query = queryInput.value.trim();
+      if (!query) {
+        showToast("请先输入查询问题");
+        queryInput.focus();
+        return;
+      }
+      interpretationDetails.open = false;
+      resultArea.classList.add("refreshing");
+      window.setTimeout(() => {
+        const state = parseDemoQuery(query);
+        renderQueryState(state);
+        resultArea.classList.remove("refreshing");
+        showToast(state.error ? "查询条件不完整，请修改问题" : `查询完成，共命中${state.rows.length}条明细`);
+      }, 180);
+    }
+
+    document.getElementById("pageSize").addEventListener("change", event => {
+      pageSize = Number(event.target.value);
+      currentPage = 1;
+      renderRows();
+    });
+
+    pageControls.addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button || button.disabled) return;
+      const totalPages = Math.max(1, Math.ceil(currentRows.length / pageSize));
+      if (button.dataset.action === "previous") currentPage -= 1;
+      if (button.dataset.action === "next") currentPage += 1;
+      if (button.dataset.page) currentPage = Number(button.dataset.page);
+      currentPage = Math.max(1, Math.min(currentPage, totalPages));
+      renderRows();
+    });
+
+    document.querySelectorAll(".example").forEach(button => {
+      button.addEventListener("click", () => {
+        queryInput.value = button.textContent.trim();
+        queryInput.focus();
+      });
+    });
+
+    document.getElementById("queryButton").addEventListener("click", runQuery);
+    queryInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") runQuery();
+    });
+
+    document.getElementById("editQuery").addEventListener("click", () => {
+      queryInput.focus();
+      queryInput.select();
+    });
+
+    exportButton.addEventListener("click", () => {
+      showToast(`演示：正式功能会导出全部${currentRows.length}条查询结果`);
+    });
+
+    document.getElementById("backButton").addEventListener("click", () => {
+      showToast("演示：正式功能会返回进度监控");
+    });
+
+    renderRows();
+  </script>
+</body>
+</html>

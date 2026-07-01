@@ -44,6 +44,8 @@ REPORT_LABELS = {
 }
 DINGTALK_KEYWORD = "成单"
 SERVER_DISABLED_PATH = ROOT / ".dashboard-server-disabled"
+SERVER_STARTED_AT = datetime.now().astimezone().isoformat(timespec="seconds")
+SERVER_CAPABILITIES = ["health", "reload-demo", "reload-target"]
 _query_demo_cache = None
 _query_target_cache = None
 _query_knowledge_cache = None
@@ -832,6 +834,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_file(OUTPUT_DIR / "summary_payload.json", "application/json; charset=utf-8")
             elif path == "/api/state":
                 self.send_json(state_payload())
+            elif path == "/api/health":
+                self.send_json(
+                    {
+                        "ok": True,
+                        "pid": os.getpid(),
+                        "started_at": SERVER_STARTED_AT,
+                        "capabilities": SERVER_CAPABILITIES,
+                    }
+                )
             elif path == "/favicon.ico":
                 self.send_file(WEB_DIR / "favicon.ico", "image/x-icon")
             elif path == "/favicon.png":
@@ -885,11 +896,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/api/upload":
                 self.handle_upload()
-            elif parsed.path == "/api/reload-demo":
-                if not DEMO_PATH.exists():
-                    raise FileNotFoundError(f"固定 demo 文件不存在：{DEMO_PATH}")
+            elif parsed.path in {"/api/reload-demo", "/api/reload-target"}:
+                kind = parsed.path.removeprefix("/api/reload-")
+                fixed_path = DEMO_PATH if kind == "demo" else TARGET_PATH
+                if not fixed_path.exists():
+                    raise FileNotFoundError(f"固定 {kind} 文件不存在：{fixed_path}")
                 rebuild_outputs()
-                self.send_json({"ok": True, "changed": ["demo"], "state": state_payload()})
+                self.send_json({"ok": True, "changed": [kind], "state": state_payload()})
             elif parsed.path == "/api/query":
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8"))

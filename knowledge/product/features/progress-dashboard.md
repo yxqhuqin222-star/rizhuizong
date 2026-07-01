@@ -20,6 +20,8 @@ The user needs to check daily progress against targets quickly after uploading a
 - Summary regeneration also refreshes all broadcast images before reporting success.
 - The demo and target cards show the actual saved-file update time after initial load and upload.
 - Clicking `上传今日 demo` directly reloads the fixed project-root `tongji_demo.xlsx` without opening a file picker.
+- Clicking `更新 target` directly reloads the fixed project-root `tongji_target.xlsx` without opening a file picker.
+- Changes to the local server or web files automatically restart the managed dashboard process; update actions retry once during the restart window.
 - Default view shows latest-term data only.
 - The detail view defaults to the `快` quick filter; the former `最新期次` chip is not shown.
 - Latest-term overview shows separate primary, middle, and high school metric rows without an aggregate or self-study row.
@@ -45,6 +47,7 @@ The user needs to check daily progress against targets quickly after uploading a
 - Scope: only each department's latest `期次` from the `target` table; historical terms and demo-only newer terms are not shown in broadcast images.
 - `渠道展示 = 线索渠道二级分类 + 价体`
 - `招生目标 = 目标`
+- `进度GAP = 时间进度 - 招生进度`，两个进度均按页面展示口径限制在 `0%–100%`，并保留正负号。
 - `剩余天数 = 总天数 - (target_time - 进量日期 - 1)`
 - `状态` matches the dashboard status rule: 未开单 / 落后 / 已完成 / 仅现状 / 快 / 正常. `快` means `完成率 - 进度 >= 10` percentage points after higher-priority statuses are excluded.
 - Dashboard and broadcast grade rows follow business order: 小学二至六年级、初中初一至初三、高中高一至高三.
