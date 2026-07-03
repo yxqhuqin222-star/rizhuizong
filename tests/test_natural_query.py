@@ -195,6 +195,18 @@ class NaturalQueryTest(unittest.TestCase):
         self.assertEqual(result["total"], 3)
         self.assertEqual(result["conditions"]["filters"]["线索渠道二级分类"], "LEC内测")
 
+    def test_field_value_matching_ignores_case_spaces_hyphens_and_underscores(self):
+        result = app.run_natural_query(
+            "6月27日 L-E_C 内测的成单量",
+            demo=self.demo,
+            target=self.target,
+            export_path=None,
+        )
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["conditions"]["filters"]["线索渠道二级分类"], "LEC内测")
+
     def test_target_only_dimension_value_is_recognized_for_default_metric(self):
         result = app.run_natural_query(
             "6月27日图书微转的单量",

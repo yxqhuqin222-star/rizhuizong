@@ -98,8 +98,8 @@ function rowsFromPayload(payload) {
 }
 
 function renderFileInfo(files) {
-  document.getElementById("demoInfo").innerHTML = `当前：${files.demo?.name || "-"}<br>更新时间：${files.demo?.updated_at || "-"}`;
-  document.getElementById("targetInfo").innerHTML = `当前：${files.target?.name || "-"}<br>更新时间：${files.target?.updated_at || "-"}`;
+  document.getElementById("demoInfo").innerHTML = `当前：${files.demo?.name || "-"}<br>上传时间：${files.demo?.uploaded_at || "尚未上传"}`;
+  document.getElementById("targetInfo").innerHTML = `当前：${files.target?.name || "-"}<br>上传时间：${files.target?.uploaded_at || "尚未上传"}`;
 }
 
 function isBehindProgress(row) {
@@ -296,8 +296,8 @@ async function reloadFixedFile(kind) {
     buildFilters();
     render();
     const fileInfo = data.state.files[kind];
-    const updatedAt = fileInfo?.updated_at ? `更新时间：${fileInfo.updated_at}` : "已完成重算";
-    uploadStatus(kind, "success", `${label} 读取成功，summary 已更新。${updatedAt}`);
+    const uploadedAt = fileInfo?.uploaded_at ? `上传时间：${fileInfo.uploaded_at}` : "已完成重算";
+    uploadStatus(kind, "success", `${label} 读取成功，summary 已更新。${uploadedAt}`);
     toast(`${label} 读取成功，summary 已更新`);
   } catch (error) {
     uploadStatus(kind, "error", `${label} 读取失败：${error.message}`);

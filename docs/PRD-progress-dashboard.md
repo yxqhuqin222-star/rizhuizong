@@ -84,7 +84,9 @@ V1 layout:
 - `更新 target` reloads the fixed project-root `tongji_target.xlsx`.
 - Validate required fields.
 - Regenerate Summary and all broadcast images before reporting success.
-- Display the actual saved-file update time.
+- Record and display the successful upload/reload time for each document.
+- File modification, page refresh, summary regeneration, and service restart must not change the displayed upload time.
+- Before the first successful upload/reload record exists, display `尚未上传`.
 - If the managed local service restarts during an update, retry the request once.
 
 #### Summary calculation
@@ -103,15 +105,20 @@ Measures:
 - `现状 = sum(成单量)`
 - `差距 = 现状 - 目标`
 - `完成率 = 现状 / 目标`
-- `下单日期 = max(下单日期)` within each item, only as current-status date reference
+- `下单日期 = max(下单日期)` within each item, for detail display
 - `进量日期 = max(进量日期)` from target within each item
-- `进度 = (当前日期 - 进量日期 - 1) / 6`
+- `当前日期 = max(下单日期)` from demo within the same `学部` and `期次`
+- `进度 = (当前日期 - 进量日期 + 1) / 6`
 - Progress is clamped to `0%` through `100%`.
 
 Rules:
 
 - `线索渠道二级分类` values beginning with `外部微转-` are grouped as `外部微转-*`.
-- `进量日期` is used for progress calculation.
+- demo 成单行按完整统计维度无法命中 target 时，改用同一 `学部`、`期次`、`价体`、`年级`寻找 target 渠道；只有一个候选时归入唯一候选，多个候选时优先归入 `常规外呼`，没有 `常规外呼` 时归入 `LEC内测`，两个优先渠道都不存在时停止生成并报错，没有候选时保留为仅现状项。
+- 原始文件中的 `价体` 保持不变；看板、查询结果和导出文件统一显示为原始值除以 100，并去除无意义的小数位，例如 `0→0`、`100→1`、`990→9.9`、`1880→18.8`、`2880→28.8`。
+- All rows in the same `学部` and `期次` use the same current date for progress calculation, regardless of channel, price, or grade.
+- Within one `学部` and `期次`, `target_time` and `进量日期` must each be unique; generation stops with an error if either field has conflicting values.
+- Rows without a department-term current date or `进量日期` have no progress value.
 - Status priority is `未开单` / `落后` / `已完成` / `仅现状`, then `快` when `完成率 - 进度 >= 10` percentage points; remaining rows are `正常`.
 
 #### Default latest-term view
@@ -136,7 +143,7 @@ Rules:
 Daily progress broadcast field mapping:
 
 - Scope: only each department's latest `期次` from the `target` table; historical terms and demo-only newer terms are not shown in broadcast images.
-- `渠道展示 = 线索渠道二级分类 + 价体`
+- `渠道展示 = 线索渠道二级分类 + 格式化后的价体`
 - `招生目标 = 目标`
 - `进度GAP = 时间进度 - 招生进度`，两个进度均按页面展示口径限制在 `0%–100%`，并保留正负号。
 - `剩余天数 = 总天数 - (target_time - 进量日期 - 1)`
@@ -157,6 +164,7 @@ Supported query behavior:
 - Relative dates such as `昨天` resolve from the current date.
 - `LLM9.9` resolves to `线索渠道二级分类 = LLM外呼` and `价体 = 990`.
 - Query vocabulary is built from values in both `demo` and `target`.
+- 字段值匹配忽略英文大小写、空格、下划线和连字符；例如 `lec内测`、`L-E_C 内测` 均匹配实际字段值 `LEC内测`。存在多个匹配值时必须要求用户确认，不能静默选择。
 - Shared dimensions can be combined; `成单量` comes from `demo`, while `目标` comes from `target`.
 - `小初高各学部` and `三个学部分别` return per-department results and a combined total.
 - If the metric is omitted, use `成单量` without asking for confirmation.

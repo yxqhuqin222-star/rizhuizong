@@ -1,26 +1,26 @@
 [
   {
     "dept": "小学",
-    "term": "暑_8",
+    "term": "暑_9",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.png",
     "summary": {
-      "目标": "12100",
-      "成单量": "11895",
-      "完成率": "0.9830578512396694",
-      "平均进度": "0.8333333333333333"
+      "目标": "12580",
+      "成单量": "2806",
+      "完成率": "0.22305246422893482",
+      "平均进度": "0.16666666666666666"
     }
   },
   {
     "dept": "初中",
-    "term": "暑_10",
+    "term": "暑_11",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.png",
     "summary": {
-      "目标": "9250",
-      "成单量": "9674",
-      "完成率": "1.045837837837838",
-      "平均进度": "1.0"
+      "目标": "9450",
+      "成单量": "4199",
+      "完成率": "0.44433862433862437",
+      "平均进度": "0.3333333333333333"
     }
   },
   {
@@ -30,9 +30,9 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.png",
     "summary": {
       "目标": "7780",
-      "成单量": "5618",
-      "完成率": "0.722107969151671",
-      "平均进度": "0.8333333333333334"
+      "成单量": "6942",
+      "完成率": "0.8922879177377891",
+      "平均进度": "1.0"
     }
   },
   {
@@ -42,7 +42,7 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.png",
     "summary": {
       "范围": "小学 暑_8 1元",
-      "成单量": "7623",
+      "成单量": "7655",
       "实际占比": "YZY=35%；WC=25%；RQ=23%；JJ=10%；SH=7%；JS=0%"
     }
   }

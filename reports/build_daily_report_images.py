@@ -72,7 +72,9 @@ def channel_label(row):
     payment = row["价体"]
     if pd.isna(payment):
         return channel
-    return f"{channel}-{int(payment)}元"
+    payment = float(payment)
+    payment_text = str(int(payment)) if payment.is_integer() else f"{payment:g}"
+    return f"{channel}-{payment_text}元"
 
 
 def progress_gap(progress, time_progress):

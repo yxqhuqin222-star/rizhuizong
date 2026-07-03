@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 from datetime import datetime, timedelta
 from email import policy
 from email.parser import BytesParser
@@ -26,6 +27,7 @@ SUMMARY_SCRIPT = OUTPUT_DIR / "build_summary.py"
 WORKBOOK_SCRIPT = OUTPUT_DIR / "build_workbook.mjs"
 NODE_BIN = Path("/Users/kityhello/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node")
 LAST_QUERY_PATH = OUTPUT_DIR / "query_result.csv"
+UPLOAD_METADATA_PATH = OUTPUT_DIR / "upload_metadata.json"
 CHANNEL_ALIAS_PATH = ROOT / "config" / "channel_aliases.csv"
 REPORT_SCRIPT = ROOT / "reports" / "build_daily_report_images.py"
 REPORT_EXPORT_SCRIPT = ROOT / "reports" / "export_daily_report_images.mjs"
@@ -49,6 +51,7 @@ SERVER_CAPABILITIES = ["health", "reload-demo", "reload-target"]
 _query_demo_cache = None
 _query_target_cache = None
 _query_knowledge_cache = None
+_upload_metadata_lock = threading.Lock()
 
 
 def load_local_env():
@@ -217,13 +220,37 @@ def send_dingtalk_report(dept):
     }
 
 
-def file_info(path):
+def load_upload_metadata():
+    if not UPLOAD_METADATA_PATH.exists():
+        return {}
+    try:
+        return json.loads(UPLOAD_METADATA_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def record_upload_time(kinds):
+    uploaded_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with _upload_metadata_lock:
+        metadata = load_upload_metadata()
+        for kind in kinds:
+            metadata[kind] = uploaded_at
+        UPLOAD_METADATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = UPLOAD_METADATA_PATH.with_suffix(".tmp")
+        temporary_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary_path.replace(UPLOAD_METADATA_PATH)
+
+
+def file_info(path, kind):
     if not path.exists():
         return None
     stat = path.stat()
     return {
         "name": path.name,
-        "updated_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        "uploaded_at": load_upload_metadata().get(kind),
         "size": stat.st_size,
     }
 
@@ -235,8 +262,8 @@ def state_payload():
         "latestSummary": rows_from_payload(payload["latest_summary"]),
         "metrics": payload["metrics"],
         "files": {
-            "demo": file_info(DEMO_PATH),
-            "target": file_info(TARGET_PATH),
+            "demo": file_info(DEMO_PATH, "demo"),
+            "target": file_info(TARGET_PATH, "target"),
         },
     }
 
@@ -701,8 +728,9 @@ def run_natural_query(
             "线索渠道二级分类",
             "价体",
         ]
+    display_result = summary_module.format_payment_for_output(result[export_cols])
     if export_path is not None:
-        result[export_cols].to_csv(export_path, index=False, encoding="utf-8-sig")
+        display_result.to_csv(export_path, index=False, encoding="utf-8-sig")
 
     page_size = int(page_size) if str(page_size).isdigit() else 10
     if page_size not in (10, 20, 50):
@@ -712,7 +740,7 @@ def run_natural_query(
     page = min(max(1, page), total_pages)
     start = (page - 1) * page_size
 
-    page_rows = result[export_cols].iloc[start:start + page_size]
+    page_rows = display_result.iloc[start:start + page_size]
     page_rows = page_rows.astype(object).where(pd.notna(page_rows), None)
     scope_name = "、".join(
         "、".join(str(item) for item in value) if isinstance(value, list) else str(value)
@@ -902,6 +930,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not fixed_path.exists():
                     raise FileNotFoundError(f"固定 {kind} 文件不存在：{fixed_path}")
                 rebuild_outputs()
+                record_upload_time([kind])
                 self.send_json({"ok": True, "changed": [kind], "state": state_payload()})
             elif parsed.path == "/api/query":
                 length = int(self.headers.get("Content-Length", "0"))
@@ -942,6 +971,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("请至少上传 demo 或 target 文件。")
 
         rebuild_outputs()
+        record_upload_time(changed)
         self.send_json({"ok": True, "changed": changed, "state": state_payload()})
 
 

@@ -1,7 +1,9 @@
 import json
+import tempfile
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
@@ -40,6 +42,7 @@ class ServerRuntimeTest(unittest.TestCase):
 
         with (
             patch("app.rebuild_outputs") as rebuild,
+            patch("app.record_upload_time") as record_upload_time,
             patch("app.state_payload", return_value=fake_state),
         ):
             for kind in ("demo", "target"):
@@ -50,6 +53,29 @@ class ServerRuntimeTest(unittest.TestCase):
                 self.assertEqual(payload["state"], fake_state)
 
         self.assertEqual(rebuild.call_count, 2)
+        self.assertEqual(
+            record_upload_time.call_args_list,
+            [unittest.mock.call(["demo"]), unittest.mock.call(["target"])],
+        )
+
+    def test_file_info_uses_recorded_upload_time_not_file_mtime(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            document_path = Path(temp_dir) / "tongji_demo.xlsx"
+            metadata_path = Path(temp_dir) / "upload_metadata.json"
+            document_path.write_bytes(b"first version")
+
+            with patch("app.UPLOAD_METADATA_PATH", metadata_path):
+                self.assertIsNone(app.file_info(document_path, "demo")["uploaded_at"])
+
+                app.record_upload_time(["demo"])
+                uploaded_at = app.file_info(document_path, "demo")["uploaded_at"]
+                self.assertIsNotNone(uploaded_at)
+
+                document_path.write_bytes(b"new version with a new file mtime")
+                self.assertEqual(
+                    app.file_info(document_path, "demo")["uploaded_at"],
+                    uploaded_at,
+                )
 
 
 if __name__ == "__main__":
