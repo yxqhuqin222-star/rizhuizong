@@ -102,7 +102,7 @@ Dimensions:
 Measures:
 
 - `目标 = sum(目标)`
-- `现状 = sum(成单量)`
+- `现状 = count(distinct custom_uid)` within each complete statistical dimension; rows without `custom_uid` are counted separately.
 - `差距 = 现状 - 目标`
 - `完成率 = 现状 / 目标`
 - `下单日期 = max(下单日期)` within each item, for detail display
@@ -114,7 +114,7 @@ Measures:
 Rules:
 
 - `线索渠道二级分类` values beginning with `外部微转-` are grouped as `外部微转-*`.
-- demo 成单行按完整统计维度无法命中 target 时，改用同一 `学部`、`期次`、`价体`、`年级`寻找 target 渠道；只有一个候选时归入唯一候选，多个候选时优先归入 `常规外呼`，没有 `常规外呼` 时归入 `LEC内测`，两个优先渠道都不存在时停止生成并报错，没有候选时保留为仅现状项。
+- demo 中的 `常规外呼` 按完整统计维度无法命中 target 时保留为仅现状项，不改归其他渠道。其他渠道无法命中时，改用同一 `学部`、`期次`、`价体`、`年级`寻找 target 渠道；只有一个候选时归入唯一候选，多个候选时优先归入 `常规外呼`，没有 `常规外呼` 时归入 `LEC内测`，两个优先渠道都不存在时停止生成并报错，没有候选时保留为仅现状项。
 - 原始文件中的 `价体` 保持不变；看板、查询结果和导出文件统一显示为原始值除以 100，并去除无意义的小数位，例如 `0→0`、`100→1`、`990→9.9`、`1880→18.8`、`2880→28.8`。
 - All rows in the same `学部` and `期次` use the same current date for progress calculation, regardless of channel, price, or grade.
 - Within one `学部` and `期次`, `target_time` and `进量日期` must each be unique; generation stops with an error if either field has conflicting values.

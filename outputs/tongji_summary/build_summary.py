@@ -21,6 +21,7 @@ DEMO_REQUIRED_COLUMNS = [
     "线索渠道二级分类",
     "last_from",
 ]
+SUMMARY_DEMO_REQUIRED_COLUMNS = DEMO_REQUIRED_COLUMNS + ["custom_uid"]
 TARGET_REQUIRED_COLUMNS = [
     "期次",
     "线索渠道二级分类",
@@ -133,9 +134,13 @@ def aggregate_current(df):
     data = df.copy()
     data["线索渠道二级分类"] = data["线索渠道二级分类"].map(normalize_channel)
     data["下单日期"] = pd.to_datetime(data["下单日期"], errors="coerce").dt.normalize()
+    data["_custom_uid_key"] = [
+        ("custom_uid", value) if pd.notna(value) else ("missing_row", position)
+        for position, value in enumerate(data["custom_uid"])
+    ]
     return (
         data.groupby(DIMENSIONS, dropna=False, as_index=False)
-        .agg(现状=("成单量", "sum"), 下单日期=("下单日期", "max"))
+        .agg(现状=("_custom_uid_key", "nunique"), 下单日期=("下单日期", "max"))
     )
 
 
@@ -163,6 +168,8 @@ def assign_unmatched_current_channels(current_summary, target_summary):
     channel_index = data.columns.get_loc("线索渠道二级分类")
     for index, row in enumerate(data[DIMENSIONS].itertuples(index=False, name=None)):
         if row in exact_target_keys:
+            continue
+        if row[2] == "常规外呼":
             continue
         fallback_key = (row[0], row[1], row[3], row[4])
         candidates = target_channels.get(fallback_key, set())
@@ -192,7 +199,7 @@ def assign_unmatched_current_channels(current_summary, target_summary):
 
 
 def build_summary(demo, target):
-    validate_columns(demo, DEMO_REQUIRED_COLUMNS, "demo")
+    validate_columns(demo, SUMMARY_DEMO_REQUIRED_COLUMNS, "demo")
     validate_columns(target, TARGET_REQUIRED_COLUMNS, "target")
     validate_department_term_dates(target)
     current_summary = aggregate_current(demo)
@@ -331,7 +338,8 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["成单量最小值", int(demo["成单量"].min())],
             ["成单量最大值", int(demo["成单量"].max())],
             ["渠道归并规则", "线索渠道二级分类以“外部微转-”开头的值统一归为“外部微转-*”"],
-            ["未命中渠道归属", "按同一学部、期次、价体、年级寻找 target 渠道；唯一候选直接归属，多个候选优先常规外呼、其次 LEC内测，两者都没有时报错，无候选保留为仅现状项"],
+            ["未命中渠道归属", "常规外呼未命中 target 时保留为仅现状项；其他渠道按同一学部、期次、价体、年级寻找 target 渠道，唯一候选直接归属，多个候选优先常规外呼、其次 LEC内测，两者都没有时报错，无候选保留为仅现状项"],
+            ["现状计算", "同一统计维度下按 custom_uid 去重计数；custom_uid 缺失的行分别计数"],
             ["缺失值检查", "两个底表的指定维度字段及数值字段均无缺失"],
         ],
         columns=["指标", "值"],
