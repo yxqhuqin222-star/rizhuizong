@@ -14,7 +14,8 @@ from urllib.request import urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTION_STATE_URL = "https://rizhuizong.netlify.app/api/state"
+PRODUCTION_BASE_URL = "https://kityhello.dpdns.org"
+PRODUCTION_STATE_URL = f"{PRODUCTION_BASE_URL}/api/state"
 PROJECT_PYTHON = Path(
     "/Users/kityhello/.cache/codex-runtimes/"
     "codex-primary-runtime/dependencies/python/bin/python3"
@@ -312,7 +313,7 @@ def publish() -> None:
     run("git", "switch", "main")
     run("git", "pull", "--ff-only", "origin", "main")
     wait_for_production(payload)
-    print("发布完成：https://rizhuizong.netlify.app/")
+    print(f"发布完成：{PRODUCTION_BASE_URL}/web/index.html")
 
 
 def main() -> None:
