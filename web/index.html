@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>进度监控</title>
-  <link rel="icon" type="image/png" href="./favicon.png">
-  <link rel="shortcut icon" href="./favicon.ico">
-  <link rel="stylesheet" href="./styles.css?v=20260626-2">
+  <link rel="icon" type="image/png" href="./favicon.png?v=20260628-1">
+  <link rel="shortcut icon" href="./favicon.ico?v=20260628-1">
+  <link rel="stylesheet" href="./styles.css?v=20260629-1">
 </head>
 <body>
   <div class="app">
@@ -18,11 +18,13 @@
         </div>
       </div>
 
-      <nav class="nav">
-        <a class="active" href="#overview">总览</a>
-        <a href="#summary">最新期次明细</a>
-        <a href="#export">导出</a>
-      </nav>
+      <button class="natural-query-entry" id="naturalQueryButton" type="button">
+        <span class="natural-query-entry-copy">
+          <strong>自然语言查询</strong>
+          <small>用一句话快速查找进量数据</small>
+        </span>
+        <span class="natural-query-entry-arrow" aria-hidden="true">→</span>
+      </button>
 
       <div class="section">
         <h2>数据更新</h2>
@@ -35,7 +37,6 @@
         <div class="upload">
           <strong>target 目标</strong>
           <div class="meta" id="targetInfo">读取中...</div>
-          <input id="targetFile" type="file" accept=".xlsx,.xls" hidden>
           <button class="btn block" id="targetUploadButton">更新 target</button>
           <div class="upload-status" id="targetUploadStatus" aria-live="polite"></div>
         </div>
@@ -47,7 +48,6 @@
         <button class="btn block" id="exportLatest">导出最新期次</button>
         <button class="btn block" id="exportAll">导出完整 Summary</button>
         <button class="btn block" id="exportQuery">导出查询明细</button>
-        <button class="btn block" id="naturalQueryButton">自然语言查询</button>
         <button class="btn block" id="reportPrimary">下载小学播报图</button>
         <button class="btn block" id="reportMiddle">下载初中播报图</button>
         <button class="btn block" id="reportHigh">下载高中播报图</button>
@@ -59,7 +59,7 @@
       </div>
     </aside>
 
-    <main>
+    <main id="mainContent">
       <div class="topbar" id="overview">
         <div class="title">
           <h1>进度监控</h1>
@@ -70,6 +70,87 @@
           <button class="btn primary" id="refreshButton">重新生成 Summary</button>
         </div>
       </div>
+
+      <section class="panel natural-query-panel" id="naturalQueryPanel" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>自然语言查询</h2>
+            <p>用一句话查询指定渠道在某个日期的进量。</p>
+          </div>
+          <button class="btn" id="closeNaturalQuery" type="button">返回进度监控</button>
+        </div>
+
+        <form class="natural-query-form" id="naturalQueryForm">
+          <label for="naturalQueryInput">你想查询什么？</label>
+          <div class="natural-query-compose">
+            <input
+              id="naturalQueryInput"
+              autocomplete="off"
+              placeholder="例如：6月27日YZY渠道的进量"
+            >
+            <button class="btn primary" id="naturalQuerySubmit" type="submit">开始查询</button>
+          </div>
+          <div class="natural-query-examples">
+            <span>试试这样问：</span>
+            <button type="button" data-query-example="YZY渠道的进量">YZY渠道的进量</button>
+            <button type="button" data-query-example="6月27日YZY渠道的进量">6月27日YZY渠道的进量</button>
+          </div>
+        </form>
+
+        <div class="query-clarification" id="queryClarification" hidden>
+          <div
+            class="query-conversation"
+            id="queryConversationHistory"
+            role="log"
+            aria-live="polite"
+            aria-label="查询确认记录"
+          ></div>
+          <button class="btn" id="restartNaturalQuery" type="button">重新提问</button>
+        </div>
+
+        <div class="query-result" id="queryResult" hidden>
+          <details class="query-interpretation" id="queryInterpretation">
+            <summary>查看系统理解</summary>
+            <div class="query-condition-list" id="queryConditionList"></div>
+          </details>
+
+          <div class="query-answer">
+            <span>查询结论</span>
+            <strong id="queryAnswer"></strong>
+          </div>
+
+          <div class="query-result-head">
+            <div>
+              <h3>查询明细</h3>
+              <span id="queryPageSummary"></span>
+            </div>
+            <div class="query-result-actions">
+              <label for="queryPageSize">每页</label>
+              <select id="queryPageSize">
+                <option value="10" selected>10 条</option>
+                <option value="20">20 条</option>
+                <option value="50">50 条</option>
+              </select>
+              <button class="btn" id="downloadQueryResult" type="button">导出全部明细</button>
+            </div>
+          </div>
+
+          <div class="table-wrap query-table-wrap">
+            <table>
+              <thead>
+                <tr id="queryResultHead"></tr>
+              </thead>
+              <tbody id="queryResultBody"></tbody>
+            </table>
+          </div>
+
+          <div class="query-pagination">
+            <button class="btn" id="queryPreviousPage" type="button">上一页</button>
+            <div class="query-page-numbers" id="queryPageNumbers"></div>
+            <button class="btn" id="queryNextPage" type="button">下一页</button>
+          </div>
+        </div>
+      </section>
 
       <section class="metrics-panel" aria-label="各学部最新期次指标">
         <div class="metrics-table-wrap">
@@ -126,7 +207,8 @@
         </div>
 
         <div class="chips">
-          <button class="chip active" data-chip="fast" id="chipFast">快</button>
+          <button class="chip active" data-chip="all" id="chipAll">最新期次</button>
+          <button class="chip" data-chip="fast" id="chipFast">快</button>
           <button class="chip" data-chip="behind" id="chipBehind">落后进度</button>
         </div>
 
@@ -140,6 +222,7 @@
                 <th class="num">价体</th>
                 <th>年级</th>
                 <th>target_time</th>
+                <th>下单日期</th>
                 <th class="num">目标</th>
                 <th class="num">现状</th>
                 <th class="num">差距</th>
@@ -156,6 +239,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="./app.js?v=20260627-1"></script>
+  <script src="./app.js?v=20260628-4"></script>
 </body>
 </html>

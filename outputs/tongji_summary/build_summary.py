@@ -38,6 +38,12 @@ DIMENSIONS = [
     "价体",
     "年级",
 ]
+FALLBACK_DIMENSIONS = [
+    "学部",
+    "期次",
+    "价体",
+    "年级",
+]
 GRADE_ORDER = {
     "小学": {
         "二年级": 1,
@@ -72,13 +78,55 @@ def normalize_channel(value):
     return value
 
 
+def format_payment_value(value):
+    if pd.isna(value):
+        return value
+    numeric = float(value) / 100
+    return int(numeric) if numeric.is_integer() else numeric
+
+
+def format_payment_for_output(df):
+    data = df.copy()
+    if "价体" in data.columns:
+        data["价体"] = data["价体"].map(format_payment_value)
+    return data
+
+
+def validate_department_term_dates(target):
+    data = target.copy()
+    for column in ["target_time", "进量日期"]:
+        data[column] = pd.to_datetime(data[column], errors="coerce").dt.normalize()
+        counts = data.groupby(["学部", "期次"], dropna=False)[column].nunique(dropna=True)
+        inconsistent = counts[counts.gt(1)]
+        if not inconsistent.empty:
+            labels = "、".join(f"{dept}/{term}" for dept, term in inconsistent.index)
+            raise ValueError(f"target 中同学部、同一期次的{column}不一致: {labels}")
+
+
 def calculate_progress(row):
-    if pd.isna(row["target_time"]) or pd.isna(row["进量日期"]):
+    if pd.isna(row["进度日期"]) or pd.isna(row["进量日期"]):
         return pd.NA
 
-    elapsed_days = (pd.Timestamp.today().normalize() - row["进量日期"]).days
+    elapsed_days = (row["进度日期"] - row["进量日期"]).days + 1
     progress = elapsed_days / TOTAL_DAYS
     return max(0, min(progress, 1))
+
+
+def add_progress_dates(summary, current_summary):
+    latest_order_dates = (
+        current_summary.groupby(
+            ["学部", "期次"],
+            dropna=False,
+            as_index=False,
+        )["下单日期"]
+        .max()
+        .rename(columns={"下单日期": "进度日期"})
+    )
+    return summary.merge(
+        latest_order_dates,
+        on=["学部", "期次"],
+        how="left",
+    )
 
 
 def aggregate_current(df):
@@ -102,11 +150,54 @@ def aggregate_target(df):
     )
 
 
+def assign_unmatched_current_channels(current_summary, target_summary):
+    target_channels = {}
+    exact_target_keys = set()
+    for row in target_summary[DIMENSIONS].itertuples(index=False, name=None):
+        exact_target_keys.add(row)
+        fallback_key = (row[0], row[1], row[3], row[4])
+        target_channels.setdefault(fallback_key, set()).add(row[2])
+
+    data = current_summary.copy()
+    ambiguous = []
+    channel_index = data.columns.get_loc("线索渠道二级分类")
+    for index, row in enumerate(data[DIMENSIONS].itertuples(index=False, name=None)):
+        if row in exact_target_keys:
+            continue
+        fallback_key = (row[0], row[1], row[3], row[4])
+        candidates = target_channels.get(fallback_key, set())
+        if len(candidates) == 1:
+            data.iat[index, channel_index] = next(iter(candidates))
+        elif len(candidates) > 1:
+            if "常规外呼" in candidates:
+                data.iat[index, channel_index] = "常规外呼"
+            elif "LEC内测" in candidates:
+                data.iat[index, channel_index] = "LEC内测"
+            else:
+                ambiguous.append(
+                    f"{row[0]}/{row[1]}/{row[4]}/{format_payment_value(row[3])}元/"
+                    f"{row[2]}→{','.join(sorted(map(str, candidates)))}"
+                )
+
+    if ambiguous:
+        raise ValueError(
+            "demo 中存在渠道未命中 target、同价体有多个候选且不含常规外呼或LEC内测: "
+            + "；".join(ambiguous)
+        )
+
+    return (
+        data.groupby(DIMENSIONS, dropna=False, as_index=False)
+        .agg(现状=("现状", "sum"), 下单日期=("下单日期", "max"))
+    )
+
+
 def build_summary(demo, target):
     validate_columns(demo, DEMO_REQUIRED_COLUMNS, "demo")
     validate_columns(target, TARGET_REQUIRED_COLUMNS, "target")
+    validate_department_term_dates(target)
     current_summary = aggregate_current(demo)
     target_summary = aggregate_target(target)
+    current_summary = assign_unmatched_current_channels(current_summary, target_summary)
 
     summary = (
         target_summary.merge(current_summary, on=DIMENSIONS, how="outer")
@@ -133,6 +224,7 @@ def build_summary(demo, target):
         lambda row: row["现状"] / row["目标"] if row["目标"] else pd.NA,
         axis=1,
     )
+    summary = add_progress_dates(summary, current_summary)
     summary["进度"] = summary.apply(calculate_progress, axis=1)
     summary["下单日期"] = summary["下单日期"].dt.strftime("%Y-%m-%d")
     summary["target_time"] = summary["target_time"].dt.strftime("%Y-%m-%d")
@@ -183,8 +275,10 @@ def metrics_for(df):
 def write_outputs(summary, current_summary, target_summary, demo, target, out_dir=OUT_DIR):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    summary.to_csv(out_dir / "tongji_summary_current.csv", index=False, encoding="utf-8-sig")
     latest_summary = latest_term_rows(summary, target_summary)
+    output_summary = format_payment_for_output(summary)
+    output_latest_summary = format_payment_for_output(latest_summary)
+    output_summary.to_csv(out_dir / "tongji_summary_current.csv", index=False, encoding="utf-8-sig")
     latest_terms = (
         latest_summary[["学部", "期次"]]
         .drop_duplicates()
@@ -201,6 +295,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             .sum()
             .sort_values(["现状", "目标"], ascending=False, kind="stable")
         )
+        dist = format_payment_for_output(dist)
         dist_tables[col] = dist
         dist.to_csv(out_dir / f"distribution_{col}.csv", index=False, encoding="utf-8-sig")
 
@@ -224,16 +319,19 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
                 else pd.NA,
             ],
             ["总天数", TOTAL_DAYS],
-            ["下单日期口径", "每个统计项下取 demo 最近一次下单日期，仅用于现状日期参考"],
+            ["下单日期口径", "明细展示每个统计项下 demo 最近一次下单日期"],
             ["进量日期口径", "每个统计项下取 target 表中的进量日期"],
-            ["进度计算", "进度=(当前日期-进量日期)/总天数，并限制在 0%-100%"],
+            ["进度计算", "进度=(当前日期-进量日期+1)/总天数，并限制在 0%-100%；当前日期统一取同学部、同一期次 demo 的最近下单日期"],
+            ["日期一致性", "同学部、同一期次的 target_time 和进量日期必须分别唯一，否则停止生成"],
             ["播报图期次口径", "以 target 表中的期次为准，小学、初中、高中各自仅播报目标表里的最新一期次数据"],
-            ["播报图渠道展示", "线索渠道二级分类 + 价体"],
+            ["价体展示", "原始价体除以 100，去除无意义的小数位，例如 100→1、990→9.9、1880→18.8"],
+            ["播报图渠道展示", "线索渠道二级分类 + 格式化后的价体"],
             ["播报图招生目标", "目标"],
-            ["播报图剩余天数", "总天数-(target_time-进量日期)"],
+            ["播报图剩余天数", "总天数-(target_time-进量日期-1)"],
             ["成单量最小值", int(demo["成单量"].min())],
             ["成单量最大值", int(demo["成单量"].max())],
             ["渠道归并规则", "线索渠道二级分类以“外部微转-”开头的值统一归为“外部微转-*”"],
+            ["未命中渠道归属", "按同一学部、期次、价体、年级寻找 target 渠道；唯一候选直接归属，多个候选优先常规外呼、其次 LEC内测，两者都没有时报错，无候选保留为仅现状项"],
             ["缺失值检查", "两个底表的指定维度字段及数值字段均无缺失"],
         ],
         columns=["指标", "值"],
@@ -241,8 +339,8 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
     metadata.to_csv(out_dir / "metadata.csv", index=False, encoding="utf-8-sig")
 
     payload = {
-        "summary": frame_to_payload(summary),
-        "latest_summary": frame_to_payload(latest_summary),
+        "summary": frame_to_payload(output_summary),
+        "latest_summary": frame_to_payload(output_latest_summary),
         "metrics": {
             "all": metrics_for(summary),
             "latest": metrics_for(latest_summary),

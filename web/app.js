@@ -2,12 +2,22 @@ const state = {
   allRows: [],
   latestRows: [],
   scope: "latest",
-  chip: "fast",
+  chip: "all",
   currentRows: [],
 };
 
+const naturalQueryState = {
+  context: null,
+  awaitingClarification: false,
+  clarificationRounds: 0,
+  conversation: [],
+  page: 1,
+  pageSize: 10,
+  totalPages: 1,
+};
+
 const apiBase = "";
-const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "目标", "现状", "差距", "完成率", "进度"];
+const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "下单日期", "目标", "现状", "差距", "完成率", "进度"];
 const metricDepartments = ["小学", "初中", "高中"];
 
 function fmtNumber(value) {
@@ -32,13 +42,34 @@ function uploadStatus(kind, type, message) {
   el.className = `upload-status show ${type}`;
 }
 
-async function requestJson(url, options) {
-  const res = await fetch(`${apiBase}${url}`, options);
+function openReport(dept) {
+  window.open(`${apiBase}/download/report?dept=${dept}`, "_blank", "noopener,noreferrer");
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function requestJson(url, options, retryOnRestart = false) {
+  let res;
+  try {
+    res = await fetch(`${apiBase}${url}`, options);
+  } catch (error) {
+    if (retryOnRestart) {
+      await wait(1200);
+      return requestJson(url, options, false);
+    }
+    throw error;
+  }
   const text = await res.text();
   let data;
   try {
     data = JSON.parse(text);
   } catch {
+    if (retryOnRestart) {
+      await wait(1200);
+      return requestJson(url, options, false);
+    }
     throw new Error("服务返回的不是 JSON，请确认本地看板服务已启动并刷新页面。");
   }
   if (!res.ok || data.error) {
@@ -49,12 +80,10 @@ async function requestJson(url, options) {
 
 async function loadState() {
   try {
-    const response = await fetch("/outputs/tongji_summary/summary_payload.json");
-    if (!response.ok) throw new Error("无法读取数据文件");
-    const data = await response.json();
-    state.allRows = rowsFromPayload(data.summary);
-    state.latestRows = rowsFromPayload(data.latest_summary);
-    renderFileInfo({ demo: { name: "tongji_demo.xlsx", updated_at: "已内置" }, target: { name: "tongji_target.xlsx", updated_at: "已内置" } });
+    const data = await requestJson("/api/state");
+    state.allRows = data.summary;
+    state.latestRows = data.latestSummary;
+    renderFileInfo(data.files);
     renderMetrics(data.metrics.latest);
     buildFilters();
     render();
@@ -69,8 +98,8 @@ function rowsFromPayload(payload) {
 }
 
 function renderFileInfo(files) {
-  document.getElementById("demoInfo").innerHTML = `当前：${files.demo?.name || "-"}<br>更新时间：${files.demo?.updated_at || "-"}`;
-  document.getElementById("targetInfo").innerHTML = `当前：${files.target?.name || "-"}<br>更新时间：${files.target?.updated_at || "-"}`;
+  document.getElementById("demoInfo").innerHTML = `当前：${files.demo?.name || "-"}<br>上传时间：${files.demo?.uploaded_at || "尚未上传"}`;
+  document.getElementById("targetInfo").innerHTML = `当前：${files.target?.name || "-"}<br>上传时间：${files.target?.uploaded_at || "尚未上传"}`;
 }
 
 function isBehindProgress(row) {
@@ -203,13 +232,16 @@ function filteredRows() {
 }
 
 function render() {
+  document.getElementById("chipAll").textContent = `${state.scope === "latest" ? "最新期次" : "全部期次"} ${activeRows().length}`;
   document.getElementById("chipFast").textContent = `快 ${activeRows().filter(row => rowStatus(row).text === "快").length}`;
   const rows = filteredRows();
   state.currentRows = rows;
   const department = document.getElementById("filterDepartment").value;
   document.getElementById("tableTitle").textContent = state.chip === "behind"
     ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
-    : `${department ? `${department} · ` : ""}快项明细（${rows.length}）`;
+    : state.chip === "fast"
+      ? `${department ? `${department} · ` : ""}快项明细（${rows.length}）`
+      : `${department ? `${department} · ` : ""}${state.scope === "latest" ? "最新期次" : "全部期次"}明细（${rows.length}）`;
   const tbody = document.getElementById("summaryBody");
   tbody.innerHTML = "";
 
@@ -223,6 +255,7 @@ function render() {
       <td class="num">${row["价体"] ?? ""}</td>
       <td>${row["年级"] ?? ""}</td>
       <td>${row["target_time"] ?? ""}</td>
+      <td>${row["下单日期"] ?? ""}</td>
       <td class="num">${fmtNumber(row["目标"])}</td>
       <td class="num">${fmtNumber(row["现状"])}</td>
       <td class="num">${fmtNumber(row["差距"])}</td>
@@ -248,16 +281,14 @@ function showBehindDetails(department) {
   document.getElementById("summary").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function uploadFile(kind, file) {
-  const form = new FormData();
-  form.append(kind, file);
+async function reloadFixedFile(kind) {
   const button = document.getElementById(`${kind}UploadButton`);
   const label = kind === "demo" ? "demo" : "target";
-  toast("正在上传并重算...");
-  uploadStatus(kind, "pending", `正在上传 ${label} 并重算 summary...`);
+  toast(`正在读取固定 ${label} 并重算...`);
+  uploadStatus(kind, "pending", `正在读取固定 ${label} 并重算 summary...`);
   button.disabled = true;
   try {
-    const data = await requestJson("/api/upload", { method: "POST", body: form });
+    const data = await requestJson(`/api/reload-${kind}`, { method: "POST" }, true);
     state.allRows = data.state.summary;
     state.latestRows = data.state.latestSummary;
     renderFileInfo(data.state.files);
@@ -265,58 +296,243 @@ async function uploadFile(kind, file) {
     buildFilters();
     render();
     const fileInfo = data.state.files[kind];
-    const updatedAt = fileInfo?.updated_at ? `更新时间：${fileInfo.updated_at}` : "已完成重算";
-    uploadStatus(kind, "success", `${label} 上传成功，summary 已更新。${updatedAt}`);
-    toast("上传成功，summary 已更新");
+    const uploadedAt = fileInfo?.uploaded_at ? `上传时间：${fileInfo.uploaded_at}` : "已完成重算";
+    uploadStatus(kind, "success", `${label} 读取成功，summary 已更新。${uploadedAt}`);
+    toast(`${label} 读取成功，summary 已更新`);
   } catch (error) {
-    uploadStatus(kind, "error", `${label} 上传失败：${error.message}`);
-    toast(error.message);
-  } finally {
-    button.disabled = false;
-    document.getElementById(`${kind}File`).value = "";
-  }
-}
-
-async function reloadDemoFile() {
-  const button = document.getElementById("demoUploadButton");
-  toast("正在读取固定 demo 并重算...");
-  uploadStatus("demo", "pending", "正在读取固定 demo 并重算 summary...");
-  button.disabled = true;
-  try {
-    const data = await requestJson("/api/reload-demo", { method: "POST" });
-    state.allRows = data.state.summary;
-    state.latestRows = data.state.latestSummary;
-    renderFileInfo(data.state.files);
-    renderMetrics(data.state.metrics.latest);
-    buildFilters();
-    render();
-    const updatedAt = data.state.files.demo?.updated_at
-      ? `更新时间：${data.state.files.demo.updated_at}`
-      : "已完成重算";
-    uploadStatus("demo", "success", `demo 读取成功，summary 已更新。${updatedAt}`);
-    toast("demo 读取成功，summary 已更新");
-  } catch (error) {
-    uploadStatus("demo", "error", `demo 读取失败：${error.message}`);
+    uploadStatus(kind, "error", `${label} 读取失败：${error.message}`);
     toast(error.message);
   } finally {
     button.disabled = false;
   }
 }
 
-async function runNaturalQuery() {
-  const sample = "6月23日，out_wxst_wxstqt_1774944753086 的成单量是多少？";
-  const query = window.prompt("请输入查询问题", sample);
-  if (!query) return;
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function openNaturalQuery() {
+  const panel = document.getElementById("naturalQueryPanel");
+  panel.hidden = false;
+  document.getElementById("mainContent").classList.add("query-mode");
+  document.getElementById("naturalQueryInput").focus();
+}
+
+function closeNaturalQuery() {
+  document.getElementById("naturalQueryPanel").hidden = true;
+  document.getElementById("mainContent").classList.remove("query-mode");
+}
+
+function renderQueryConversation() {
+  const history = document.getElementById("queryConversationHistory");
+  history.innerHTML = "";
+  naturalQueryState.conversation.forEach((turn, index) => {
+    const row = document.createElement("div");
+    row.className = `query-conversation-turn ${turn.role}`;
+    if (
+      naturalQueryState.awaitingClarification
+      && turn.role === "assistant"
+      && index === naturalQueryState.conversation.length - 1
+    ) {
+      row.classList.add("current");
+    }
+
+    const label = document.createElement("span");
+    label.className = "query-conversation-role";
+    label.textContent = turn.role === "user" ? "你" : "系统";
+
+    const message = document.createElement("span");
+    message.className = "query-conversation-message";
+    message.textContent = turn.message;
+
+    row.append(label, message);
+    history.appendChild(row);
+  });
+}
+
+function appendQueryConversationTurn(role, message) {
+  naturalQueryState.conversation.push({ role, message });
+  renderQueryConversation();
+}
+
+function showQueryClarification(message, role = "assistant") {
+  const clarification = document.getElementById("queryClarification");
+  appendQueryConversationTurn(role, message);
+  clarification.hidden = false;
+  document.getElementById("queryResult").hidden = true;
+}
+
+function hideQueryClarification() {
+  const clarification = document.getElementById("queryClarification");
+  clarification.hidden = true;
+}
+
+function resetNaturalQueryConversation() {
+  naturalQueryState.context = null;
+  naturalQueryState.awaitingClarification = false;
+  naturalQueryState.clarificationRounds = 0;
+  naturalQueryState.conversation = [];
+  naturalQueryState.page = 1;
+  renderQueryConversation();
+  hideQueryClarification();
+  document.getElementById("queryResult").hidden = true;
+  const input = document.getElementById("naturalQueryInput");
+  input.value = "";
+  input.placeholder = "例如：6月27日YZY渠道的进量";
+  input.focus();
+}
+
+function renderQueryPagination(result) {
+  naturalQueryState.page = result.page;
+  naturalQueryState.totalPages = result.totalPages;
+
+  document.getElementById("queryPreviousPage").disabled = result.page <= 1;
+  document.getElementById("queryNextPage").disabled = result.page >= result.totalPages;
+  document.getElementById("queryPageSummary").textContent =
+    `共 ${fmtNumber(result.matchedRows)} 条，第 ${result.page}/${result.totalPages} 页`;
+
+  const pageSet = new Set([1, result.totalPages, result.page - 1, result.page, result.page + 1]);
+  const pages = [...pageSet]
+    .filter(page => page >= 1 && page <= result.totalPages)
+    .sort((a, b) => a - b);
+  const container = document.getElementById("queryPageNumbers");
+  container.innerHTML = "";
+  pages.forEach((page, index) => {
+    if (index > 0 && page - pages[index - 1] > 1) {
+      const gap = document.createElement("span");
+      gap.textContent = "…";
+      container.appendChild(gap);
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = page;
+    button.dataset.queryPage = page;
+    button.classList.toggle("active", page === result.page);
+    button.setAttribute("aria-label", `第${page}页`);
+    container.appendChild(button);
+  });
+}
+
+function renderNaturalQueryResult(result) {
+  const conditions = result.conditions;
+  naturalQueryState.context = {
+    date: conditions.date,
+    last_from: conditions.last_from,
+    channel_name: conditions.channelName,
+    channel_field: conditions.channel_field,
+    channel_value: conditions.channel_value,
+    payment: conditions.payment,
+    metric: conditions.metric,
+    filters: conditions.filters,
+    group_by: conditions.groupBy,
+  };
+  naturalQueryState.awaitingClarification = false;
+  naturalQueryState.clarificationRounds = 0;
+
+  const conditionList = document.getElementById("queryConditionList");
+  const conditionValues = [];
+  if (conditions.date) conditionValues.push(`日期：${conditions.date}`);
+  Object.entries(conditions.filters || {}).forEach(([field, value]) => {
+    conditionValues.push(`${field}：${Array.isArray(value) ? value.join("、") : value}`);
+  });
+  if (conditions.last_from) conditionValues.push(`last_from：${conditions.last_from}`);
+  conditionValues.push(`指标：${conditions.metric}`);
+  conditionList.innerHTML = conditionValues
+    .map(value => `<span>${escapeHtml(value)}</span>`)
+    .join("");
+
+  document.getElementById("queryInterpretation").open = false;
+  document.getElementById("queryAnswer").textContent = result.answer;
+  document.getElementById("queryResult").hidden = false;
+  document.getElementById("naturalQueryInput").placeholder = "例如：6月27日YZY渠道的进量";
+
+  const numericColumns = new Set(["价体", "成单量", "目标"]);
+  document.getElementById("queryResultHead").innerHTML = result.columns
+    .map(column => `<th class="${numericColumns.has(column) ? "num" : ""}">${escapeHtml(column)}</th>`)
+    .join("");
+
+  const tbody = document.getElementById("queryResultBody");
+  tbody.innerHTML = result.rows.length
+    ? result.rows.map(row => `
+      <tr>
+        ${result.columns.map(column => `
+          <td class="${numericColumns.has(column) ? "num" : ""}">${escapeHtml(row[column])}</td>
+        `).join("")}
+      </tr>
+    `).join("")
+    : `<tr><td colspan="${result.columns.length}">没有匹配的查询明细</td></tr>`;
+
+  renderQueryPagination(result);
+}
+
+async function requestNaturalQuery(query, page = 1) {
+  const submitButton = document.getElementById("naturalQuerySubmit");
+  submitButton.disabled = true;
   try {
     const result = await requestJson("/api/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({
+        query,
+        context: naturalQueryState.context,
+        page,
+        pageSize: naturalQueryState.pageSize,
+      }),
     });
-    toast(`${result.conditions.date}，${result.conditions.last_from} 的成单量是 ${result.total}，命中 ${result.matchedRows} 行`);
+
+    if (result.status === "needs_clarification") {
+      naturalQueryState.clarificationRounds += 1;
+      if (naturalQueryState.clarificationRounds > 2) {
+        naturalQueryState.context = null;
+        naturalQueryState.awaitingClarification = false;
+        showQueryClarification("信息仍不完整，请重新输入包含日期和渠道的完整问题。");
+        return;
+      }
+      naturalQueryState.context = result.context;
+      naturalQueryState.awaitingClarification = true;
+      showQueryClarification(result.question);
+      const input = document.getElementById("naturalQueryInput");
+      input.value = "";
+      input.placeholder = result.question;
+      input.focus();
+      return;
+    }
+
+    hideQueryClarification();
+    renderNaturalQueryResult(result);
   } catch (error) {
-    toast(error.message);
+    showQueryClarification(error.message);
+  } finally {
+    submitButton.disabled = false;
   }
+}
+
+async function submitNaturalQuery() {
+  const input = document.getElementById("naturalQueryInput");
+  const query = input.value.trim();
+  if (!query) {
+    toast("请输入查询问题");
+    input.focus();
+    return;
+  }
+  if (!naturalQueryState.awaitingClarification) {
+    naturalQueryState.context = null;
+    naturalQueryState.clarificationRounds = 0;
+    naturalQueryState.conversation = [];
+  }
+  naturalQueryState.awaitingClarification = false;
+  appendQueryConversationTurn("user", query);
+  await requestNaturalQuery(query, 1);
+}
+
+async function loadNaturalQueryPage(page) {
+  if (!naturalQueryState.context) return;
+  await requestNaturalQuery("", page);
 }
 
 async function broadcastReport(dept) {
@@ -336,9 +552,8 @@ async function broadcastReport(dept) {
 }
 
 function bindEvents() {
-  document.getElementById("demoUploadButton").addEventListener("click", reloadDemoFile);
-  document.getElementById("targetUploadButton").addEventListener("click", () => document.getElementById("targetFile").click());
-  document.getElementById("targetFile").addEventListener("change", event => event.target.files[0] && uploadFile("target", event.target.files[0]));
+  document.getElementById("demoUploadButton").addEventListener("click", () => reloadFixedFile("demo"));
+  document.getElementById("targetUploadButton").addEventListener("click", () => reloadFixedFile("target"));
 
   ["filterDepartment", "filterTerm", "filterChannel", "filterPayment", "filterOrderDate", "filterKeyword"].forEach(id => {
     document.getElementById(id).addEventListener("input", render);
@@ -361,11 +576,47 @@ function bindEvents() {
   document.getElementById("exportCurrent").addEventListener("click", exportCurrentRows);
   document.getElementById("downloadWorkbook").addEventListener("click", () => location.href = `${apiBase}/download/workbook`);
   document.getElementById("exportQuery").addEventListener("click", () => location.href = `${apiBase}/download/query`);
-  document.getElementById("naturalQueryButton").addEventListener("click", runNaturalQuery);
-  document.getElementById("reportPrimary").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=primary`);
-  document.getElementById("reportMiddle").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=middle`);
-  document.getElementById("reportHigh").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=high`);
-  document.getElementById("reportLec1").addEventListener("click", () => location.href = `${apiBase}/download/report?dept=lec1`);
+  document.getElementById("naturalQueryButton").addEventListener("click", openNaturalQuery);
+  document.getElementById("closeNaturalQuery").addEventListener("click", closeNaturalQuery);
+  document.getElementById("restartNaturalQuery").addEventListener("click", resetNaturalQueryConversation);
+  document.getElementById("naturalQueryForm").addEventListener("submit", event => {
+    event.preventDefault();
+    submitNaturalQuery();
+  });
+  document.querySelectorAll("[data-query-example]").forEach(button => {
+    button.addEventListener("click", () => {
+      naturalQueryState.context = null;
+      naturalQueryState.awaitingClarification = false;
+      naturalQueryState.clarificationRounds = 0;
+      naturalQueryState.conversation = [];
+      renderQueryConversation();
+      hideQueryClarification();
+      const input = document.getElementById("naturalQueryInput");
+      input.value = button.dataset.queryExample;
+      input.focus();
+    });
+  });
+  document.getElementById("queryPageSize").addEventListener("change", event => {
+    naturalQueryState.pageSize = Number(event.target.value);
+    loadNaturalQueryPage(1);
+  });
+  document.getElementById("queryPreviousPage").addEventListener("click", () => {
+    loadNaturalQueryPage(naturalQueryState.page - 1);
+  });
+  document.getElementById("queryNextPage").addEventListener("click", () => {
+    loadNaturalQueryPage(naturalQueryState.page + 1);
+  });
+  document.getElementById("queryPageNumbers").addEventListener("click", event => {
+    const button = event.target.closest("[data-query-page]");
+    if (button) loadNaturalQueryPage(Number(button.dataset.queryPage));
+  });
+  document.getElementById("downloadQueryResult").addEventListener("click", () => {
+    location.href = `${apiBase}/download/query`;
+  });
+  document.getElementById("reportPrimary").addEventListener("click", () => openReport("primary"));
+  document.getElementById("reportMiddle").addEventListener("click", () => openReport("middle"));
+  document.getElementById("reportHigh").addEventListener("click", () => openReport("high"));
+  document.getElementById("reportLec1").addEventListener("click", () => openReport("lec1"));
   document.getElementById("broadcastPrimary").addEventListener("click", () => broadcastReport("primary"));
   document.getElementById("broadcastMiddle").addEventListener("click", () => broadcastReport("middle"));
   document.getElementById("broadcastHigh").addEventListener("click", () => broadcastReport("high"));
@@ -374,9 +625,9 @@ function bindEvents() {
 
 function toggleScope() {
   state.scope = state.scope === "latest" ? "all" : "latest";
-  state.chip = "fast";
+  state.chip = "all";
   document.querySelectorAll(".chip").forEach(el => el.classList.remove("active"));
-  document.querySelector('[data-chip="fast"]').classList.add("active");
+  document.querySelector('[data-chip="all"]').classList.add("active");
   document.getElementById("tableTitle").textContent = state.scope === "latest" ? "最新期次明细" : "全部期次明细";
   document.getElementById("toggleScopeButton").textContent = state.scope === "latest" ? "切换到全部期次" : "切换到最新期次";
   buildFilters();

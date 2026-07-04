@@ -45,6 +45,4 @@ Revisit if the user needs multiple users, long-term upload history, remote acces
 
 ## Linked
 
-- Feature: [knowledge/product/features/progress-dashboard.md](../knowledge/product/features/progress-dashboard.md)
 - PRD: [docs/PRD-progress-dashboard.md](../docs/PRD-progress-dashboard.md)
-

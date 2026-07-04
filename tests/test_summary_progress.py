@@ -1,0 +1,303 @@
+import importlib.util
+import unittest
+from pathlib import Path
+
+import pandas as pd
+
+
+MODULE_PATH = Path(__file__).parents[1] / "outputs" / "tongji_summary" / "build_summary.py"
+SPEC = importlib.util.spec_from_file_location("build_summary", MODULE_PATH)
+build_summary = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(build_summary)
+
+
+class SummaryProgressTest(unittest.TestCase):
+    def test_assigns_unmatched_channel_when_target_candidate_is_unique(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_8",
+                    "线索渠道二级分类": "测试测试",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "现状": 7,
+                    "下单日期": pd.Timestamp("2026-07-03"),
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_8",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "现状": 5,
+                    "下单日期": pd.Timestamp("2026-07-02"),
+                },
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_8",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                }
+            ]
+        )
+
+        result = build_summary.assign_unmatched_current_channels(current, target)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "LEC内测")
+        self.assertEqual(result.loc[0, "现状"], 12)
+        self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-07-03"))
+
+    def test_prefers_regular_outbound_when_target_has_multiple_candidates(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "高中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "测试测试",
+                    "价体": 100,
+                    "年级": "高一",
+                    "现状": 7,
+                    "下单日期": pd.Timestamp("2026-07-03"),
+                }
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "高中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "图书店铺",
+                    "价体": 100,
+                    "年级": "高一",
+                },
+                {
+                    "学部": "高中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "常规外呼",
+                    "价体": 100,
+                    "年级": "高一",
+                },
+            ]
+        )
+
+        result = build_summary.assign_unmatched_current_channels(current, target)
+
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "常规外呼")
+
+    def test_prefers_lec_when_multiple_candidates_do_not_include_regular_outbound(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "测试测试",
+                    "价体": 990,
+                    "年级": "初二",
+                    "现状": 7,
+                    "下单日期": pd.Timestamp("2026-07-03"),
+                }
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 990,
+                    "年级": "初二",
+                },
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "初二",
+                },
+            ]
+        )
+
+        result = build_summary.assign_unmatched_current_channels(current, target)
+
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "LEC内测")
+
+    def test_rejects_multiple_candidates_without_preferred_channel(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "高中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "测试测试",
+                    "价体": 100,
+                    "年级": "高一",
+                    "现状": 7,
+                    "下单日期": pd.Timestamp("2026-07-03"),
+                }
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "高中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "图书店铺",
+                    "价体": 100,
+                    "年级": "高一",
+                },
+                {
+                    "学部": "高中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "外部微转-*",
+                    "价体": 100,
+                    "年级": "高一",
+                },
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "不含常规外呼或LEC内测"):
+            build_summary.assign_unmatched_current_channels(current, target)
+    def test_formats_payment_for_display_without_changing_source(self):
+        source = pd.DataFrame({"价体": [0, 100, 990, 1880, 2880]})
+
+        result = build_summary.format_payment_for_output(source)
+
+        self.assertEqual(result["价体"].tolist(), [0, 1, 9.9, 18.8, 28.8])
+        self.assertEqual(source["价体"].tolist(), [0, 100, 990, 1880, 2880])
+
+    def test_uses_latest_order_date_inclusively(self):
+        row = pd.Series(
+            {
+                "下单日期": pd.Timestamp("2026-07-02"),
+                "进量日期": pd.Timestamp("2026-07-02"),
+                "进度日期": pd.Timestamp("2026-07-02"),
+            }
+        )
+
+        self.assertAlmostEqual(build_summary.calculate_progress(row), 1 / 6)
+
+    def test_clamps_progress_to_zero_and_one(self):
+        before_intake = pd.Series(
+            {
+                "下单日期": pd.Timestamp("2026-07-01"),
+                "进量日期": pd.Timestamp("2026-07-03"),
+                "进度日期": pd.Timestamp("2026-07-01"),
+            }
+        )
+        after_period = pd.Series(
+            {
+                "下单日期": pd.Timestamp("2026-07-10"),
+                "进量日期": pd.Timestamp("2026-07-02"),
+                "进度日期": pd.Timestamp("2026-07-10"),
+            }
+        )
+
+        self.assertEqual(build_summary.calculate_progress(before_intake), 0)
+        self.assertEqual(build_summary.calculate_progress(after_period), 1)
+
+    def test_missing_order_date_has_no_progress(self):
+        row = pd.Series(
+            {
+                "下单日期": pd.NaT,
+                "进量日期": pd.Timestamp("2026-07-02"),
+                "进度日期": pd.NaT,
+            }
+        )
+
+        self.assertTrue(pd.isna(build_summary.calculate_progress(row)))
+
+    def test_all_rows_use_latest_department_term_order_date(self):
+        summary = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LLM外呼",
+                    "下单日期": pd.Timestamp("2026-06-27"),
+                    "进量日期": pd.Timestamp("2026-07-01"),
+                },
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "常规外呼",
+                    "下单日期": pd.Timestamp("2026-06-30"),
+                    "进量日期": pd.Timestamp("2026-07-01"),
+                },
+            ]
+        )
+        current_summary = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LLM外呼",
+                    "下单日期": pd.Timestamp("2026-06-27"),
+                },
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "常规外呼",
+                    "下单日期": pd.Timestamp("2026-07-01"),
+                },
+            ]
+        )
+
+        result = build_summary.add_progress_dates(summary, current_summary)
+
+        self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-06-27"))
+        self.assertEqual(result.loc[0, "进度日期"], pd.Timestamp("2026-07-01"))
+        self.assertEqual(result.loc[1, "进度日期"], pd.Timestamp("2026-07-01"))
+        self.assertAlmostEqual(build_summary.calculate_progress(result.loc[0]), 1 / 6)
+        self.assertAlmostEqual(build_summary.calculate_progress(result.loc[1]), 1 / 6)
+
+    def test_department_term_without_order_date_has_no_progress(self):
+        summary = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LLM外呼",
+                    "下单日期": pd.NaT,
+                    "进量日期": pd.Timestamp("2026-07-01"),
+                }
+            ]
+        )
+        current_summary = summary[
+            ["学部", "期次", "线索渠道二级分类", "下单日期"]
+        ].copy()
+
+        result = build_summary.add_progress_dates(summary, current_summary)
+
+        self.assertTrue(pd.isna(result.loc[0, "进度日期"]))
+        self.assertTrue(pd.isna(build_summary.calculate_progress(result.loc[0])))
+
+    def test_rejects_conflicting_department_term_dates(self):
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_8",
+                    "target_time": "2026-07-01",
+                    "进量日期": "2026-06-25",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_8",
+                    "target_time": "2026-07-02",
+                    "进量日期": "2026-06-25",
+                },
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "target_time不一致"):
+            build_summary.validate_department_term_dates(target)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,56 +1,28 @@
-# PM Brain
+# 日追踪看板
 
-A markdown-native second brain for a product operator — a PM, product lead, or anyone accountable for one product or initiative with judgment-heavy work and scattered inputs.
+读取每日 `tongji_demo.xlsx` 和每周 `tongji_target.xlsx`，生成进度汇总、网页看板和学部播报图，并支持规则化自然语言查询。
 
-## What this is
+产品需求和计算口径以 [PRD](./docs/PRD-progress-dashboard.md) 为准，历史变更见 [CHANGELOG](./docs/CHANGELOG.md)。
 
-- One repo. Markdown files. Versioned with git.
-- One `AGENTS.md` operating manual the agent reads at the start of every session.
-- Pre-task load, post-task update — every task. No silent drift.
-
-No vector database. No embeddings. No auto-tagging. The system is inspectable, editable, and auditable.
-
-## How to start a session
-
-1. Open this repo in Codex (or any agentic IDE).
-2. The agent reads [`AGENTS.md`](./AGENTS.md) automatically.
-3. Start a task. The agent routes through [`INDEX.md`](./INDEX.md) to the relevant area.
-
-## First-week priorities
-
-1. **Ingest your most recent customer interview** — `/ingest interview <file>` (or paste a transcript). See what the system does with it.
-2. **Prep for your next 1:1** — `/prep <highest-friction-stakeholder>`. Let it tell you what to ask.
-3. **Run `/review` at the end of week one.** The maintenance sweep is where most systems quietly die. Build the habit early.
-
-## How the system thinks
-
-- **Working memory vs durable knowledge.** Raw ingestion lives in `ingestion/`. Only recurring, decision-relevant, strategy-relevant signals get promoted into `knowledge/`.
-- **Hypotheses vs decisions.** Bets being tested live in `hypotheses/`. Commitments made live in `decisions/`. They behave differently and stay queryable separately.
-- **Flag, never gate.** The system surfaces conflicts, missing hypotheses, and strategy tensions. The PM resolves them. This is a reasoning system, not a compliance system.
-- **Contradictions are preserved.** When evidence genuinely conflicts, the system writes the conflict down instead of flattening it into false consensus.
-
-Full positioning and the five structural differentiators: [docs/overview.md](./docs/overview.md).
-
-## Folder map
+## 目录
 
 ```
-AGENTS.md           Operating manual. Read every session.
-INDEX.md            Master routing.
-source/             Immutable evidence (if migrated from existing artifacts).
-knowledge/          Durable, synthesized — strategy, product, users, market, org.
-stakeholders/       One file per person.
-hypotheses/         Feature-scoped, 5 risk areas (value/usability/feasibility/viability/other).
-decisions/          Append-only log. Status: pending | decided | superseded.
-rules/              How this PM runs discovery, prioritization, shipping, writing, data.
-ingestion/          Working memory — interviews, meetings, market, adhoc.
-maintenance/        Weekly sweep reports.
-docs/               Workflows, schemas, overview, evolution guide.
-Temp/               Scratch. Gitignored. Created on demand the first time you need it.
+app.py               本地 HTTP 服务和 API
+web/                 看板前端
+outputs/             Summary 计算、工作簿和中间结果
+reports/             播报图生成与导出
+config/              渠道别名和本地服务配置
+tests/               自动化测试
+docs/                PRD 和变更记录
+decisions/           架构决策
+source/              原始需求证据
+rules/               项目规则
+archives/            历史压缩快照
 ```
 
-## Reference docs
+## 常用操作
 
-- **[docs/overview.md](./docs/overview.md)** — What this is, what makes it different, what it's not. Read first.
-- **[docs/workflows.md](./docs/workflows.md)** — Every slash command, what it loads, what it updates.
-- **[docs/schemas.md](./docs/schemas.md)** — Cross-index of all schemas.
-- **[docs/system-evolution.md](./docs/system-evolution.md)** — How to keep the system useful over time. The 8 failure modes and the 2-week / monthly / quarterly refinement cadence. Load before maintenance reviews.
+- 启动与重启：`scripts/restart_dashboard.sh`
+- 健康检查：`GET /api/health`
+- 页面入口：`http://127.0.0.1:8766`
+- 修改产品行为前先核对 [PRD](./docs/PRD-progress-dashboard.md)。

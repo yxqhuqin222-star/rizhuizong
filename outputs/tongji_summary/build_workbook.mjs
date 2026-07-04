@@ -40,7 +40,7 @@ summarySheet.showGridLines = false;
 writeTable(summarySheet, "目标 + 现状对比", payload.summary);
 summarySheet.freezePanes.freezeRows(2);
 const summaryRows = payload.summary.rows.length;
-summarySheet.getRangeByIndexes(2, 3, summaryRows, 1).setNumberFormat("#,##0");
+summarySheet.getRangeByIndexes(2, 3, summaryRows, 1).setNumberFormat("0.##");
 summarySheet.getRangeByIndexes(2, 5, summaryRows, 3).setNumberFormat("yyyy-mm-dd");
 summarySheet.getRangeByIndexes(2, 8, summaryRows, 3).setNumberFormat("#,##0");
 summarySheet.getRangeByIndexes(2, 11, summaryRows, 2).setNumberFormat("0.0%");
@@ -54,6 +54,40 @@ for (const [name, table] of Object.entries(payload.distributions)) {
   const height = writeTable(overviewSheet, label, table, offset, 0);
   offset += height + 2;
 }
+
+const rulesSheet = workbook.worksheets.add("计算规则");
+rulesSheet.showGridLines = false;
+const calculationRules = {
+  headers: ["分类", "项目", "计算规则"],
+  rows: [
+    ["聚合范围", "统计维度", "按学部、期次、线索渠道二级分类、价体、年级聚合"],
+    ["展示格式", "价体", "原始价体除以 100，去除无意义的小数位，例如 100→1、990→9.9、1880→18.8"],
+    ["字段归并", "线索渠道二级分类", "以“外部微转-”开头的值统一归为“外部微转-*”"],
+    ["字段归并", "未命中 target 的渠道", "按同一学部、期次、价体、年级寻找 target 渠道；唯一候选直接归属，多个候选优先常规外呼、其次 LEC内测，两者都没有时报错，无候选保留为仅现状项"],
+    ["目标", "目标", "同一统计维度下 target 表的目标之和"],
+    ["目标", "target_time", "同一统计维度下 target 表的最晚 target_time"],
+    ["目标", "进量日期", "同一统计维度下 target 表的最晚进量日期"],
+    ["现状", "现状", "同一统计维度下 demo 表的成单量之和"],
+    ["现状", "下单日期", "同一统计维度下 demo 表的最近一次下单日期，用于明细展示"],
+    ["对比指标", "差距", "现状 - 目标"],
+    ["对比指标", "完成率", "现状 ÷ 目标；目标为 0 时留空"],
+    ["对比指标", "进度", "（当前日期 - 进量日期 + 1）÷ 总天数；当前日期统一取同学部、同一期次 demo 的最近下单日期；总天数为 6 天，结果限制在 0%～100%"],
+    ["校验", "日期一致性", "同学部、同一期次的 target_time 和进量日期必须分别唯一，否则停止生成"],
+    ["合并规则", "目标与现状", "按统计维度全量合并；仅有目标或仅有现状的组合也保留，缺失的目标/现状按 0 计算"],
+    ["最新期次", "默认范围", "以 target 表中的期次为准，每个学部取数字序号最大的期次"],
+    ["最新期次", "demo-only 期次", "保留在完整 Summary 中，但不进入默认最新期次范围"],
+    ["整体指标", "完成率整体", "现状合计 ÷ 目标合计；目标合计为 0 时留空"],
+    ["整体指标", "平均进度", "所选范围内有有效进度值的各统计项进度算术平均"],
+    ["整体指标", "落后项", "完成率低于进度，且进度值有效的统计项数量"],
+  ],
+};
+writeTable(rulesSheet, "Summary 计算规则", calculationRules);
+rulesSheet.freezePanes.freezeRows(2);
+rulesSheet.getRange("A1:C21").format.wrapText = true;
+rulesSheet.getRange("A1:A21").format.columnWidth = 14;
+rulesSheet.getRange("B1:B21").format.columnWidth = 18;
+rulesSheet.getRange("C1:C21").format.columnWidth = 72;
+rulesSheet.getRange("A1:C21").format.autofitRows();
 
 const errors = await workbook.inspect({
   kind: "match",
