@@ -1,3 +1,9 @@
 [build]
+  command = "python3 scripts/build_netlify_readonly.py"
   publish = "netlify/public"
   functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/state"
+  to = "/api/state.json"
+  status = 200

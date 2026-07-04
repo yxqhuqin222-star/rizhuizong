@@ -10,3 +10,7 @@ Thumbs.db
 
 # Local Netlify folder
 .netlify
+netlify/public/api/
+netlify/public/downloads/
+netlify/public/reports/
+netlify/public/web/
