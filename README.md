@@ -23,6 +23,7 @@ archives/            历史压缩快照
 ## 常用操作
 
 - 启动与重启：`scripts/restart_dashboard.sh`
+- 发布只读看板：`python3 scripts/publish_netlify.py`
 - 健康检查：`GET /api/health`
 - 页面入口：`http://127.0.0.1:8766`
 - 修改产品行为前先核对 [PRD](./docs/PRD-progress-dashboard.md)。

@@ -12,6 +12,77 @@ SPEC.loader.exec_module(build_summary)
 
 
 class SummaryProgressTest(unittest.TestCase):
+    def test_counts_distinct_custom_uid_within_each_summary_dimension(self):
+        demo = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": 1001,
+                    "成单量": 1,
+                    "下单日期": "2026-07-02",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": 1001,
+                    "成单量": 1,
+                    "下单日期": "2026-07-03",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": 1002,
+                    "成单量": 1,
+                    "下单日期": "2026-07-03",
+                },
+            ]
+        )
+
+        result = build_summary.aggregate_current(demo)
+
+        self.assertEqual(result.loc[0, "现状"], 2)
+        self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-07-03"))
+
+    def test_counts_rows_separately_when_custom_uid_is_missing(self):
+        demo = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "常规外呼",
+                    "价体": 100,
+                    "年级": "初一",
+                    "custom_uid": pd.NA,
+                    "成单量": 1,
+                    "下单日期": "2026-07-02",
+                },
+                {
+                    "学部": "初中",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "常规外呼",
+                    "价体": 100,
+                    "年级": "初一",
+                    "custom_uid": pd.NA,
+                    "成单量": 1,
+                    "下单日期": "2026-07-03",
+                },
+            ]
+        )
+
+        result = build_summary.aggregate_current(demo)
+
+        self.assertEqual(result.loc[0, "现状"], 2)
+
     def test_assigns_unmatched_channel_when_target_candidate_is_unique(self):
         current = pd.DataFrame(
             [
@@ -53,6 +124,37 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertEqual(result.loc[0, "线索渠道二级分类"], "LEC内测")
         self.assertEqual(result.loc[0, "现状"], 12)
         self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-07-03"))
+
+    def test_keeps_unmatched_regular_outbound_as_current_only(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "常规外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "现状": 7,
+                    "下单日期": pd.Timestamp("2026-07-03"),
+                }
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                }
+            ]
+        )
+
+        result = build_summary.assign_unmatched_current_channels(current, target)
+
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "常规外呼")
+        self.assertEqual(result.loc[0, "现状"], 7)
 
     def test_prefers_regular_outbound_when_target_has_multiple_candidates(self):
         current = pd.DataFrame(
