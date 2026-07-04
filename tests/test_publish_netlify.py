@@ -11,6 +11,12 @@ SPEC.loader.exec_module(publish_netlify)
 
 
 class PublishNetlifyTests(unittest.TestCase):
+    def test_production_url_uses_custom_domain(self):
+        self.assertEqual(
+            publish_netlify.PRODUCTION_STATE_URL,
+            "https://kityhello.dpdns.org/api/state",
+        )
+
     def test_current_outputs_are_consistent(self):
         payload, snapshot = publish_netlify.validate_outputs()
 
