@@ -17,6 +17,7 @@ const naturalQueryState = {
 };
 
 const apiBase = "";
+const readOnlyMode = window.DASHBOARD_READ_ONLY === true;
 const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "下单日期", "目标", "现状", "差距", "完成率", "进度"];
 const metricDepartments = ["小学", "初中", "高中"];
 
@@ -43,6 +44,16 @@ function uploadStatus(kind, type, message) {
 }
 
 function openReport(dept) {
+  if (readOnlyMode) {
+    const reportFiles = {
+      primary: "/reports/primary_daily_progress.png",
+      middle: "/reports/middle_daily_progress.png",
+      high: "/reports/high_daily_progress.png",
+      lec1: "/reports/lec1_share.png",
+    };
+    window.open(reportFiles[dept], "_blank", "noopener,noreferrer");
+    return;
+  }
   window.open(`${apiBase}/download/report?dept=${dept}`, "_blank", "noopener,noreferrer");
 }
 
@@ -552,6 +563,24 @@ async function broadcastReport(dept) {
 }
 
 function bindEvents() {
+  if (readOnlyMode) {
+    [
+      "demoUploadButton",
+      "targetUploadButton",
+      "naturalQueryButton",
+      "exportQuery",
+      "broadcastPrimary",
+      "broadcastMiddle",
+      "broadcastHigh",
+      "broadcastLec1",
+    ].forEach(id => {
+      document.getElementById(id).hidden = true;
+    });
+    document.querySelectorAll(".upload-status").forEach(element => {
+      element.hidden = true;
+    });
+  }
+
   document.getElementById("demoUploadButton").addEventListener("click", () => reloadFixedFile("demo"));
   document.getElementById("targetUploadButton").addEventListener("click", () => reloadFixedFile("target"));
 
@@ -571,10 +600,18 @@ function bindEvents() {
   document.getElementById("toggleScopeButton").addEventListener("click", toggleScope);
   document.getElementById("showAllButton").addEventListener("click", () => { if (state.scope !== "all") toggleScope(); });
   document.getElementById("refreshButton").addEventListener("click", loadState);
-  document.getElementById("exportLatest").addEventListener("click", () => location.href = `${apiBase}/download/summary?scope=latest`);
-  document.getElementById("exportAll").addEventListener("click", () => location.href = `${apiBase}/download/summary?scope=all`);
+  document.getElementById("exportLatest").addEventListener("click", () => {
+    if (readOnlyMode) exportRows(state.latestRows, "summary_latest.csv");
+    else location.href = `${apiBase}/download/summary?scope=latest`;
+  });
+  document.getElementById("exportAll").addEventListener("click", () => {
+    if (readOnlyMode) exportRows(state.allRows, "summary_all.csv");
+    else location.href = `${apiBase}/download/summary?scope=all`;
+  });
   document.getElementById("exportCurrent").addEventListener("click", exportCurrentRows);
-  document.getElementById("downloadWorkbook").addEventListener("click", () => location.href = `${apiBase}/download/workbook`);
+  document.getElementById("downloadWorkbook").addEventListener("click", () => {
+    location.href = readOnlyMode ? "/downloads/tongji_summary_current.xlsx" : `${apiBase}/download/workbook`;
+  });
   document.getElementById("exportQuery").addEventListener("click", () => location.href = `${apiBase}/download/query`);
   document.getElementById("naturalQueryButton").addEventListener("click", openNaturalQuery);
   document.getElementById("closeNaturalQuery").addEventListener("click", closeNaturalQuery);
@@ -642,17 +679,21 @@ function exportCurrentRows() {
     toast("当前视图没有可导出的数据");
     return;
   }
+  exportRows(state.currentRows, `summary_current_view_${state.scope}.csv`);
+}
+
+function exportRows(rows, filename) {
   const headers = tableColumns;
   const escape = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const lines = [
     headers.join(","),
-    ...state.currentRows.map(row => headers.map(key => escape(row[key])).join(",")),
+    ...rows.map(row => headers.map(key => escape(row[key])).join(",")),
   ];
   const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `summary_current_view_${state.scope}.csv`;
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
 }
