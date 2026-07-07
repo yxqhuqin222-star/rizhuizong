@@ -116,11 +116,7 @@ function renderFileInfo(files) {
 }
 
 function isBehindProgress(row) {
-  const progress = row["进度"];
-  return progress !== null
-    && progress !== undefined
-    && progress !== ""
-    && Number(row["完成率"] || 0) < Number(progress);
+  return rowStatus(row).text === "落后";
 }
 
 function metricsForRows(rows) {
@@ -206,9 +202,11 @@ function buildFilters() {
 
 function rowStatus(row) {
   if (Number(row["目标"]) > 0 && Number(row["现状"]) === 0) return { text: "未开单", cls: "empty" };
-  if (row["进度"] !== null && Number(row["完成率"] || 0) < Number(row["进度"])) return { text: "落后", cls: "late" };
-  if (Number(row["目标"]) > 0 && Number(row["完成率"] || 0) >= 1) return { text: "已完成", cls: "done" };
   if (Number(row["目标"]) === 0 && Number(row["现状"]) > 0) return { text: "仅现状", cls: "current-only" };
+  if (Number(row["目标"]) > 0 && row["进度"] !== null && Number(row["完成率"] || 0) < Number(row["进度"])) {
+    return { text: "落后", cls: "late" };
+  }
+  if (Number(row["目标"]) > 0 && Number(row["完成率"] || 0) >= 1) return { text: "已完成", cls: "done" };
   if (row["进度"] !== null && Number(row["完成率"] || 0) - Number(row["进度"]) + 1e-9 >= 0.1) {
     return { text: "快", cls: "normal" };
   }

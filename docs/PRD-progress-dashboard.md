@@ -121,7 +121,7 @@ Rules:
 - All rows in the same `学部` and `期次` use the same current date for progress calculation, regardless of channel, price, or grade.
 - Within one `学部` and `期次`, `target_time` and `进量日期` must each be unique; generation stops with an error if either field has conflicting values.
 - Rows without a department-term current date or `进量日期` have no progress value.
-- Status priority is `未开单` / `落后` / `已完成` / `仅现状`, then `快` when `完成率 - 进度 >= 10` percentage points; remaining rows are `正常`.
+- Status priority is `未开单` / `仅现状` / `落后` / `已完成`, then `快` when `完成率 - 进度 >= 10` percentage points; remaining rows are `正常`. Only rows with `目标 > 0` can be classified as `落后`. Rows with `目标 = 0` and `现状 > 0` are `仅现状`; rows with `目标 = 0` are not included in the behind count.
 
 #### Default latest-term view
 
