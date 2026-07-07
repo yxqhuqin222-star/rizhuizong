@@ -4,6 +4,7 @@ const state = {
   scope: "latest",
   chip: "all",
   currentRows: [],
+  reportUrls: {},
 };
 
 const naturalQueryState = {
@@ -51,7 +52,7 @@ function openReport(dept) {
       high: "/reports/high_daily_progress.png",
       lec1: "/reports/lec1_share.png",
     };
-    window.open(reportFiles[dept], "_blank", "noopener,noreferrer");
+    window.open(state.reportUrls[dept] || reportFiles[dept], "_blank", "noopener,noreferrer");
     return;
   }
   window.open(`${apiBase}/download/report?dept=${dept}`, "_blank", "noopener,noreferrer");
@@ -94,6 +95,7 @@ async function loadState() {
     const data = await requestJson("/api/state");
     state.allRows = data.summary;
     state.latestRows = data.latestSummary;
+    state.reportUrls = data.reportUrls || {};
     renderFileInfo(data.files);
     renderMetrics(data.metrics.latest);
     buildFilters();
@@ -302,14 +304,19 @@ async function reloadFixedFile(kind) {
     const data = await requestJson(`/api/reload-${kind}`, { method: "POST" }, true);
     state.allRows = data.state.summary;
     state.latestRows = data.state.latestSummary;
+    state.reportUrls = data.state.reportUrls || {};
     renderFileInfo(data.state.files);
     renderMetrics(data.state.metrics.latest);
     buildFilters();
     render();
     const fileInfo = data.state.files[kind];
     const uploadedAt = fileInfo?.uploaded_at ? `上传时间：${fileInfo.uploaded_at}` : "已完成重算";
-    uploadStatus(kind, "success", `${label} 读取成功，summary 已更新。${uploadedAt}`);
-    toast(`${label} 读取成功，summary 已更新`);
+    const syncText = data.sync?.ok
+      ? `线上已同步：${data.sync.syncedAt || "已完成"}`
+      : `线上未同步：${data.sync?.message || "未返回同步结果"}`;
+    const statusType = data.sync?.ok ? "success" : "error";
+    uploadStatus(kind, statusType, `${label} 读取成功，summary 已更新。${uploadedAt}。${syncText}`);
+    toast(data.sync?.ok ? `${label} 已更新并同步线上` : `${label} 本地已更新，线上同步失败`);
   } catch (error) {
     uploadStatus(kind, "error", `${label} 读取失败：${error.message}`);
     toast(error.message);
@@ -610,7 +617,7 @@ function bindEvents() {
   });
   document.getElementById("exportCurrent").addEventListener("click", exportCurrentRows);
   document.getElementById("downloadWorkbook").addEventListener("click", () => {
-    location.href = readOnlyMode ? "/downloads/tongji_summary_current.xlsx" : `${apiBase}/download/workbook`;
+    location.href = readOnlyMode ? "/download/workbook" : `${apiBase}/download/workbook`;
   });
   document.getElementById("exportQuery").addEventListener("click", () => location.href = `${apiBase}/download/query`);
   document.getElementById("naturalQueryButton").addEventListener("click", openNaturalQuery);

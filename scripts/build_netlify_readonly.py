@@ -66,14 +66,25 @@ def build():
                 "uploaded_at": upload_metadata.get("target"),
             },
         },
+        "reportUrls": {
+            "primary": "/reports/primary_daily_progress.png",
+            "middle": "/reports/middle_daily_progress.png",
+            "high": "/reports/high_daily_progress.png",
+            "lec1": "/reports/lec1_share.png",
+        },
     }
+    state_json = json.dumps(
+        state,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
     (API_DIR / "state.json").write_text(
-        json.dumps(
-            state,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            allow_nan=False,
-        ),
+        state_json,
+        encoding="utf-8",
+    )
+    (API_DIR / "state-static.json").write_text(
+        state_json,
         encoding="utf-8",
     )
 
