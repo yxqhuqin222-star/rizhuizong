@@ -12,6 +12,7 @@ from email import policy
 from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlparse
 from urllib.request import Request, urlopen
 
@@ -44,10 +45,16 @@ REPORT_LABELS = {
     "high": "高中",
     "lec1": "lec1元占比",
 }
+STATIC_REPORT_URLS = {
+    "primary": "/reports/primary_daily_progress.png",
+    "middle": "/reports/middle_daily_progress.png",
+    "high": "/reports/high_daily_progress.png",
+    "lec1": "/reports/lec1_share.png",
+}
 DINGTALK_KEYWORD = "成单"
 SERVER_DISABLED_PATH = ROOT / ".dashboard-server-disabled"
 SERVER_STARTED_AT = datetime.now().astimezone().isoformat(timespec="seconds")
-SERVER_CAPABILITIES = ["health", "reload-demo", "reload-target"]
+SERVER_CAPABILITIES = ["health", "reload-demo", "reload-target", "online-sync"]
 _query_demo_cache = None
 _query_target_cache = None
 _query_knowledge_cache = None
@@ -70,6 +77,15 @@ load_local_env()
 DINGTALK_WEBHOOK = os.environ.get("DINGTALK_WEBHOOK", "")
 REPORT_IMAGE_UPLOAD_URL = os.environ.get("REPORT_IMAGE_UPLOAD_URL", "")
 REPORT_UPLOAD_TOKEN = os.environ.get("REPORT_UPLOAD_TOKEN", "")
+DASHBOARD_SYNC_TOKEN = os.environ.get("DASHBOARD_SYNC_TOKEN", REPORT_UPLOAD_TOKEN)
+DASHBOARD_STATE_UPLOAD_URL = os.environ.get(
+    "DASHBOARD_STATE_UPLOAD_URL",
+    "https://kityhello.dpdns.org/api/state",
+)
+DASHBOARD_WORKBOOK_UPLOAD_URL = os.environ.get(
+    "DASHBOARD_WORKBOOK_UPLOAD_URL",
+    "https://kityhello.dpdns.org/download/workbook",
+)
 
 
 def load_summary_module():
@@ -165,6 +181,58 @@ def upload_report_image(dept, image_path):
     if not image_url:
         raise RuntimeError("图片存储服务未返回公开地址。")
     return image_url
+
+
+def post_online_bytes(url, data, content_type):
+    request = Request(
+        url,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {DASHBOARD_SYNC_TOKEN}",
+            "Content-Type": content_type,
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            text = response.read().decode("utf-8")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"线上同步失败（HTTP {exc.code}）：{detail}") from exc
+    try:
+        return json.loads(text) if text else {}
+    except json.JSONDecodeError:
+        return {"raw": text}
+
+
+def sync_online_state(state):
+    if not DASHBOARD_SYNC_TOKEN:
+        return {"ok": False, "skipped": True, "message": "缺少 DASHBOARD_SYNC_TOKEN 或 REPORT_UPLOAD_TOKEN。"}
+    if not DASHBOARD_STATE_UPLOAD_URL or not DASHBOARD_WORKBOOK_UPLOAD_URL:
+        return {"ok": False, "skipped": True, "message": "缺少线上同步地址。"}
+
+    try:
+        report_urls = {}
+        for dept, image_path in REPORT_FILES.items():
+            report_urls[dept] = upload_report_image(dept, image_path)
+
+        online_state = dict(state)
+        online_state["reportUrls"] = report_urls
+        online_state["syncedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
+
+        post_online_bytes(
+            DASHBOARD_WORKBOOK_UPLOAD_URL,
+            (OUTPUT_DIR / "tongji_summary_current.xlsx").read_bytes(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        result = post_online_bytes(
+            DASHBOARD_STATE_UPLOAD_URL,
+            json.dumps(online_state, ensure_ascii=False, allow_nan=False).encode("utf-8"),
+            "application/json; charset=utf-8",
+        )
+        return {"ok": True, "state": result, "syncedAt": online_state["syncedAt"]}
+    except (OSError, URLError, RuntimeError, ValueError) as exc:
+        return {"ok": False, "message": str(exc)}
 
 
 def format_report_summary_value(key, value):
@@ -265,6 +333,7 @@ def state_payload():
             "demo": file_info(DEMO_PATH, "demo"),
             "target": file_info(TARGET_PATH, "target"),
         },
+        "reportUrls": STATIC_REPORT_URLS,
     }
 
 
@@ -931,7 +1000,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise FileNotFoundError(f"固定 {kind} 文件不存在：{fixed_path}")
                 rebuild_outputs()
                 record_upload_time([kind])
-                self.send_json({"ok": True, "changed": [kind], "state": state_payload()})
+                state = state_payload()
+                sync = sync_online_state(state)
+                self.send_json({"ok": True, "changed": [kind], "state": state, "sync": sync})
             elif parsed.path == "/api/query":
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -972,7 +1043,9 @@ class Handler(BaseHTTPRequestHandler):
 
         rebuild_outputs()
         record_upload_time(changed)
-        self.send_json({"ok": True, "changed": changed, "state": state_payload()})
+        state = state_payload()
+        sync = sync_online_state(state)
+        self.send_json({"ok": True, "changed": changed, "state": state, "sync": sync})
 
 
 def main():

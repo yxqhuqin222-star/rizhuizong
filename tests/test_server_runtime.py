@@ -34,7 +34,9 @@ class ServerRuntimeTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(payload["ok"])
         self.assertTrue(
-            {"health", "reload-demo", "reload-target"}.issubset(payload["capabilities"])
+            {"health", "reload-demo", "reload-target", "online-sync"}.issubset(
+                payload["capabilities"]
+            )
         )
 
     def test_fixed_file_reload_endpoints_return_json(self):
@@ -44,6 +46,7 @@ class ServerRuntimeTest(unittest.TestCase):
             patch("app.rebuild_outputs") as rebuild,
             patch("app.record_upload_time") as record_upload_time,
             patch("app.state_payload", return_value=fake_state),
+            patch("app.sync_online_state", return_value={"ok": True}) as sync_online_state,
         ):
             for kind in ("demo", "target"):
                 status, payload = self.request_json(f"/api/reload-{kind}", method="POST")
@@ -51,12 +54,21 @@ class ServerRuntimeTest(unittest.TestCase):
                 self.assertTrue(payload["ok"])
                 self.assertEqual(payload["changed"], [kind])
                 self.assertEqual(payload["state"], fake_state)
+                self.assertEqual(payload["sync"], {"ok": True})
 
         self.assertEqual(rebuild.call_count, 2)
+        self.assertEqual(sync_online_state.call_count, 2)
         self.assertEqual(
             record_upload_time.call_args_list,
             [unittest.mock.call(["demo"]), unittest.mock.call(["target"])],
         )
+
+    def test_online_sync_can_be_skipped_when_token_is_missing(self):
+        with patch("app.DASHBOARD_SYNC_TOKEN", ""):
+            result = app.sync_online_state({"summary": [], "latestSummary": [], "metrics": {}})
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["skipped"])
 
     def test_file_info_uses_recorded_upload_time_not_file_mtime(self):
         with tempfile.TemporaryDirectory() as temp_dir:

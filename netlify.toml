@@ -5,5 +5,10 @@
 
 [[redirects]]
   from = "/api/state"
-  to = "/api/state.json"
+  to = "/.netlify/functions/dashboard-state"
+  status = 200
+
+[[redirects]]
+  from = "/download/workbook"
+  to = "/.netlify/functions/dashboard-workbook"
   status = 200

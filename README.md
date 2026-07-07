@@ -28,3 +28,9 @@ archives/            历史压缩快照
 - 健康检查：`GET /api/health`
 - 页面入口：`http://127.0.0.1:8766`
 - 修改产品行为前先核对 [PRD](./docs/PRD-progress-dashboard.md)。
+
+## 线上实时同步
+
+本地点击 `上传今日 demo` 或 `更新 target` 后，会先重算本地 Summary、工作簿和播报图，再把最新状态同步到线上只读看板。同步成功后，线上页面刷新即可看到最新数据；同步失败时，本地更新仍保留，页面会显示失败原因。
+
+本地同步复用 `.env.local` 中的 `REPORT_UPLOAD_TOKEN`，也可以单独配置 `DASHBOARD_SYNC_TOKEN`。默认同步地址是 `https://kityhello.dpdns.org/api/state` 和 `https://kityhello.dpdns.org/download/workbook`。

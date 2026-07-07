@@ -88,6 +88,8 @@ V1 layout:
 - File modification, page refresh, summary regeneration, and service restart must not change the displayed upload time.
 - Before the first successful upload/reload record exists, display `尚未上传`.
 - If the managed local service restarts during an update, retry the request once.
+- After a local reload succeeds, sync the latest state, workbook, and broadcast images to the production read-only site.
+- If online sync fails, keep the local reload result and show the sync failure in the update status.
 
 #### Summary calculation
 
@@ -225,6 +227,7 @@ No database, login, external API, or cloud service is required for V1.
 - Latest/full/query downloads return valid files.
 - Broadcast image downloads return valid PNG files generated from the latest Summary.
 - The running service returns a healthy response from `/api/health`.
+- Production `/api/state` and `/download/workbook` can serve the latest synced cloud copy, with static build output as fallback.
 
 ### V2
 
