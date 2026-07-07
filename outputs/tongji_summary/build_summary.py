@@ -268,7 +268,8 @@ def metrics_for(df):
     current_total = int(df["现状"].sum())
     progress_values = pd.to_numeric(df["进度"], errors="coerce")
     completion_values = pd.to_numeric(df["完成率"], errors="coerce").fillna(0)
-    behind = df[progress_values.notna() & completion_values.lt(progress_values)]
+    has_target = pd.to_numeric(df["目标"], errors="coerce").fillna(0).gt(0)
+    behind = df[has_target & progress_values.notna() & completion_values.lt(progress_values)]
     return {
         "target_total": target_total,
         "current_total": current_total,

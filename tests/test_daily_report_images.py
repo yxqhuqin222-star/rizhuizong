@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from reports.build_daily_report_images import channel_label, progress_gap, remaining_days, render_rows
+from reports.build_daily_report_images import channel_label, progress_gap, remaining_days, render_rows, status_text
 
 
 class RemainingDaysTest(unittest.TestCase):
@@ -33,6 +33,14 @@ class ChannelLabelTest(unittest.TestCase):
         row = pd.Series({"线索渠道二级分类": "LLM外呼", "价体": 9.9})
 
         self.assertEqual(channel_label(row), "LLM外呼-9.9元")
+
+
+class StatusTextTest(unittest.TestCase):
+    def test_current_only_row_is_not_marked_behind(self):
+        self.assertEqual(status_text(0, 1, pd.NA, 2 / 3), "仅现状")
+
+    def test_zero_target_and_zero_current_is_not_marked_behind(self):
+        self.assertEqual(status_text(0, 0, pd.NA, 2 / 3), "正常")
 
 
 if __name__ == "__main__":

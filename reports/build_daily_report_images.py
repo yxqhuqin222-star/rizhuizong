@@ -91,12 +91,12 @@ def status_text(target, current, completion, time_progress):
     completion = 0 if pd.isna(completion) else float(completion)
     if target > 0 and current == 0:
         return "未开单"
-    if not pd.isna(time_progress) and completion < float(time_progress):
+    if target == 0 and current > 0:
+        return "仅现状"
+    if target > 0 and not pd.isna(time_progress) and completion < float(time_progress):
         return "落后"
     if target > 0 and completion >= 1:
         return "已完成"
-    if target == 0 and current > 0:
-        return "仅现状"
     if not pd.isna(time_progress) and completion - float(time_progress) + 1e-9 >= 0.1:
         return "快"
     return "正常"

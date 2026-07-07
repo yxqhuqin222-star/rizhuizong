@@ -12,6 +12,16 @@ SPEC.loader.exec_module(build_summary)
 
 
 class SummaryProgressTest(unittest.TestCase):
+    def test_current_only_row_is_not_counted_as_behind(self):
+        frame = pd.DataFrame(
+            [
+                {"目标": 0, "现状": 1, "完成率": pd.NA, "进度": 2 / 3},
+                {"目标": 100, "现状": 50, "完成率": 0.5, "进度": 2 / 3},
+            ]
+        )
+
+        self.assertEqual(build_summary.metrics_for(frame)["behind_count"], 1)
+
     def test_counts_distinct_custom_uid_within_each_summary_dimension(self):
         demo = pd.DataFrame(
             [
