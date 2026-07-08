@@ -93,6 +93,60 @@ class SummaryProgressTest(unittest.TestCase):
 
         self.assertEqual(result.loc[0, "现状"], 2)
 
+    def test_filters_current_rows_before_department_term_intake_date(self):
+        demo = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": "before-intake",
+                    "成单量": 1,
+                    "下单日期": "2026-07-01",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": "on-intake",
+                    "成单量": 1,
+                    "下单日期": "2026-07-02",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_10",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": "demo-only-term",
+                    "成单量": 1,
+                    "下单日期": "2026-07-01",
+                },
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "目标": 100,
+                    "target_time": "2026-07-08",
+                    "进量日期": "2026-07-02",
+                }
+            ]
+        )
+
+        result = build_summary.filter_current_by_intake_date(demo, target)
+
+        self.assertEqual(result["custom_uid"].tolist(), ["on-intake", "demo-only-term"])
+
     def test_assigns_unmatched_channel_when_target_candidate_is_unique(self):
         current = pd.DataFrame(
             [
