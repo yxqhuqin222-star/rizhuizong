@@ -130,6 +130,25 @@ def add_progress_dates(summary, current_summary):
     )
 
 
+def filter_current_by_intake_date(demo, target):
+    data = demo.copy()
+    data["下单日期"] = pd.to_datetime(data["下单日期"], errors="coerce").dt.normalize()
+
+    intake_dates = target.copy()
+    intake_dates["进量日期"] = pd.to_datetime(
+        intake_dates["进量日期"],
+        errors="coerce",
+    ).dt.normalize()
+    intake_dates = (
+        intake_dates.groupby(["学部", "期次"], dropna=False, as_index=False)["进量日期"]
+        .max()
+        .rename(columns={"进量日期": "目标进量日期"})
+    )
+    data = data.merge(intake_dates, on=["学部", "期次"], how="left")
+    keep = data["目标进量日期"].isna() | data["下单日期"].ge(data["目标进量日期"])
+    return data.loc[keep].drop(columns=["目标进量日期"])
+
+
 def aggregate_current(df):
     data = df.copy()
     data["线索渠道二级分类"] = data["线索渠道二级分类"].map(normalize_channel)
@@ -202,6 +221,7 @@ def build_summary(demo, target):
     validate_columns(demo, SUMMARY_DEMO_REQUIRED_COLUMNS, "demo")
     validate_columns(target, TARGET_REQUIRED_COLUMNS, "target")
     validate_department_term_dates(target)
+    demo = filter_current_by_intake_date(demo, target)
     current_summary = aggregate_current(demo)
     target_summary = aggregate_target(target)
     current_summary = assign_unmatched_current_channels(current_summary, target_summary)
@@ -340,7 +360,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["成单量最大值", int(demo["成单量"].max())],
             ["渠道归并规则", "线索渠道二级分类以“外部微转-”开头的值统一归为“外部微转-*”"],
             ["未命中渠道归属", "常规外呼未命中 target 时保留为仅现状项；其他渠道按同一学部、期次、价体、年级寻找 target 渠道，唯一候选直接归属，多个候选优先常规外呼、其次 LEC内测，两者都没有时报错，无候选保留为仅现状项"],
-            ["现状计算", "同一统计维度下按 custom_uid 去重计数；custom_uid 缺失的行分别计数"],
+            ["现状计算", "同学部、同一期次有 target 进量日期时，仅统计下单日期不早于进量日期的 demo；同一统计维度下按 custom_uid 去重计数，custom_uid 缺失的行分别计数"],
             ["缺失值检查", "两个底表的指定维度字段及数值字段均无缺失"],
         ],
         columns=["指标", "值"],
