@@ -283,16 +283,16 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertEqual(result["价体"].tolist(), [0, 1, 9.9, 18.8, 28.8])
         self.assertEqual(source["价体"].tolist(), [0, 100, 990, 1880, 2880])
 
-    def test_uses_latest_order_date_inclusively(self):
+    def test_uses_latest_order_date_without_counting_intake_day_twice(self):
         row = pd.Series(
             {
-                "下单日期": pd.Timestamp("2026-07-02"),
+                "下单日期": pd.Timestamp("2026-07-07"),
                 "进量日期": pd.Timestamp("2026-07-02"),
-                "进度日期": pd.Timestamp("2026-07-02"),
+                "进度日期": pd.Timestamp("2026-07-07"),
             }
         )
 
-        self.assertAlmostEqual(build_summary.calculate_progress(row), 1 / 6)
+        self.assertAlmostEqual(build_summary.calculate_progress(row), 5 / 6)
 
     def test_clamps_progress_to_zero_and_one(self):
         before_intake = pd.Series(
@@ -365,8 +365,8 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-06-27"))
         self.assertEqual(result.loc[0, "进度日期"], pd.Timestamp("2026-07-01"))
         self.assertEqual(result.loc[1, "进度日期"], pd.Timestamp("2026-07-01"))
-        self.assertAlmostEqual(build_summary.calculate_progress(result.loc[0]), 1 / 6)
-        self.assertAlmostEqual(build_summary.calculate_progress(result.loc[1]), 1 / 6)
+        self.assertAlmostEqual(build_summary.calculate_progress(result.loc[0]), 0)
+        self.assertAlmostEqual(build_summary.calculate_progress(result.loc[1]), 0)
 
     def test_department_term_without_order_date_has_no_progress(self):
         summary = pd.DataFrame(
