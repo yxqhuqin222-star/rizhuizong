@@ -110,7 +110,7 @@ Measures:
 - `下单日期 = max(下单日期)` within each item, for detail display
 - `进量日期 = max(进量日期)` from target within each item
 - `当前日期 = max(下单日期)` from demo within the same `学部` and `期次`
-- `进度 = (当前日期 - 进量日期) / 6`
+- If `当前日期 < 进量日期`, `进度 = 0`; otherwise `进度 = max(当前日期 - 进量日期, 1) / 6`.
 - Progress is clamped to `0%` through `100%`.
 
 Rules:

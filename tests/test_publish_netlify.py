@@ -25,8 +25,9 @@ class PublishNetlifyTests(unittest.TestCase):
         for department in snapshot.values():
             self.assertGreater(department["target"], 0)
             self.assertGreaterEqual(department["current"], 0)
-            self.assertGreaterEqual(department["progress"], 0)
-            self.assertLessEqual(department["progress"], 1)
+            if department["progress"] is not None:
+                self.assertGreaterEqual(department["progress"], 0)
+                self.assertLessEqual(department["progress"], 1)
 
     def test_porcelain_parser_preserves_unicode_names(self):
         paths = publish_netlify.parse_porcelain_paths(

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -79,6 +80,20 @@ def rows_from_payload(table: dict) -> list[dict]:
     return [dict(zip(headers, row)) for row in table["rows"]]
 
 
+def optional_float(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            pass
+    if value in (None, "", "<NA>"):
+        return None
+    number = float(value)
+    return None if math.isnan(number) else number
+
+
 def department_snapshot(rows: list[dict]) -> dict[str, dict]:
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
@@ -98,14 +113,14 @@ def department_snapshot(rows: list[dict]) -> dict[str, dict]:
         }
         if len(terms) != 1:
             raise ValueError(f"{department}最新明细包含多个期次：{sorted(terms)}")
-        if len(progress_values) != 1:
+        if len(progress_values) > 1:
             raise ValueError(
                 f"{department}最新明细进度不唯一：{sorted(progress_values)}"
             )
 
         target = sum(float(row.get("目标") or 0) for row in department_rows)
         current = sum(float(row.get("现状") or 0) for row in department_rows)
-        progress = next(iter(progress_values))
+        progress = next(iter(progress_values)) if progress_values else None
         snapshot[department] = {
             "term": next(iter(terms)),
             "target": int(target),
@@ -136,8 +151,8 @@ def validate_outputs() -> tuple[dict, dict[str, dict]]:
             "term": report["term"],
             "target": int(summary["目标"]),
             "current": int(summary["成单量"]),
-            "completion": float(summary["完成率"]),
-            "progress": float(summary["平均进度"]),
+            "completion": optional_float(summary["完成率"]),
+            "progress": optional_float(summary["平均进度"]),
         }
         for key in ("term", "target", "current"):
             if actual[key] != expected[key]:
@@ -145,7 +160,9 @@ def validate_outputs() -> tuple[dict, dict[str, dict]]:
                     f"{department}{key}不一致：明细={expected[key]}，播报图={actual[key]}"
                 )
         for key in ("completion", "progress"):
-            if abs(actual[key] - expected[key]) > 1e-9:
+            if actual[key] is None and expected[key] is None:
+                continue
+            if actual[key] is None or expected[key] is None or abs(actual[key] - expected[key]) > 1e-9:
                 raise ValueError(
                     f"{department}{key}不一致：明细={expected[key]}，播报图={actual[key]}"
                 )
@@ -172,10 +189,11 @@ def print_snapshot(snapshot: dict[str, dict]) -> None:
             if item["completion"] is not None
             else "--"
         )
+        progress = f"{item['progress']:.1%}" if item["progress"] is not None else "--"
         print(
             f"{department} {item['term']}："
             f"目标={item['target']}，现状={item['current']}，"
-            f"完成率={completion}，进度={item['progress']:.1%}"
+            f"完成率={completion}，进度={progress}"
         )
 
 

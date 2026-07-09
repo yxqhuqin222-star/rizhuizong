@@ -426,12 +426,15 @@ def render_department(dept, df):
     file_slug = {"小学": "primary", "初中": "middle", "高中": "high"}[dept]
     html_path = OUT_DIR / f"{file_slug}_daily_progress.html"
     html_path.write_text(html_text, encoding="utf-8")
+    def summary_value(value):
+        return None if pd.isna(value) else json.dumps(value, ensure_ascii=False, default=str)
+
     return {
         "dept": dept,
         "term": latest,
         "html": str(html_path),
         "png": str(OUT_DIR / f"{file_slug}_daily_progress.png"),
-        "summary": {key: json.dumps(value, ensure_ascii=False, default=str) for key, value in summary.items()},
+        "summary": {key: summary_value(value) for key, value in summary.items()},
     }
 
 
