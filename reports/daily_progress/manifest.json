@@ -1,38 +1,38 @@
 [
   {
     "dept": "小学",
-    "term": "暑_9",
+    "term": "暑_10",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.png",
     "summary": {
-      "目标": "12580",
-      "成单量": "12006",
-      "完成率": "0.9543720190779015",
-      "平均进度": "0.8333333333333334"
+      "目标": "15250",
+      "成单量": "0",
+      "完成率": "0.0",
+      "平均进度": null
     }
   },
   {
     "dept": "初中",
-    "term": "暑_11",
+    "term": "暑_12",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.png",
     "summary": {
-      "目标": "9450",
-      "成单量": "9611",
-      "完成率": "1.017037037037037",
-      "平均进度": "1.0"
+      "目标": "10080",
+      "成单量": "1571",
+      "完成率": "0.1558531746031746",
+      "平均进度": "0.16666666666666666"
     }
   },
   {
     "dept": "高中",
-    "term": "暑_12",
+    "term": "暑_13",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.png",
     "summary": {
-      "目标": "5940",
-      "成单量": "5012",
-      "完成率": "0.8437710437710437",
-      "平均进度": "0.8333333333333336"
+      "目标": "6560",
+      "成单量": "0",
+      "完成率": "0.0",
+      "平均进度": null
     }
   },
   {
