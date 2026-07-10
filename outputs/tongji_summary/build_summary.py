@@ -105,15 +105,20 @@ def validate_department_term_dates(target):
 
 
 def calculate_progress(row):
-    if pd.isna(row["进度日期"]) or pd.isna(row["进量日期"]):
+    if (
+        pd.isna(row["进度日期"])
+        or pd.isna(row["进量日期"])
+        or pd.isna(row["target_time"])
+    ):
         return pd.NA
 
-    elapsed_days = (row["进度日期"] - row["进量日期"]).days
-    if elapsed_days < 0:
+    if row["进度日期"] < row["进量日期"]:
         return 0
+    if row["进度日期"] >= row["target_time"]:
+        return 1
 
-    progress = max(elapsed_days, 1) / TOTAL_DAYS
-    return max(0, min(progress, 1))
+    elapsed_days = (row["进度日期"] - row["进量日期"]).days + 1
+    return min(elapsed_days, TOTAL_DAYS - 1) / TOTAL_DAYS
 
 
 def add_progress_dates(summary, current_summary):
@@ -352,13 +357,13 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["总天数", TOTAL_DAYS],
             ["下单日期口径", "明细展示每个统计项下 demo 最近一次下单日期"],
             ["进量日期口径", "每个统计项下取 target 表中的进量日期"],
-            ["进度计算", "当前日期早于进量日期时进度=0；当前日期不早于进量日期时，进度=max(当前日期-进量日期,1)/总天数，并限制在 0%-100%；当前日期统一取同学部、同一期次 demo 的最近下单日期"],
+            ["进度计算", "当前日期统一取同学部、同一期次 demo 的最近下单日期；早于进量日期时进度=0；进量日期至目标日前按 min(当前日期-进量日期+1,5)/6 计算；目标日及以后进度=100%"],
             ["日期一致性", "同学部、同一期次的 target_time 和进量日期必须分别唯一，否则停止生成"],
             ["播报图期次口径", "以 target 表中的期次为准，小学、初中、高中各自仅播报目标表里的最新一期次数据"],
             ["价体展示", "原始价体除以 100，去除无意义的小数位，例如 100→1、990→9.9、1880→18.8"],
             ["播报图渠道展示", "线索渠道二级分类 + 格式化后的价体"],
             ["播报图招生目标", "目标"],
-            ["播报图剩余天数", "总天数-(target_time-进量日期-1)"],
+            ["播报图剩余天数", "max(6-当前进度阶段,1)；当前进度阶段=进度×6"],
             ["成单量最小值", int(demo["成单量"].min())],
             ["成单量最大值", int(demo["成单量"].max())],
             ["渠道归并规则", "线索渠道二级分类以“外部微转-”开头的值统一归为“外部微转-*”"],

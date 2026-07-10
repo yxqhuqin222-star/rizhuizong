@@ -201,14 +201,14 @@ tbody tr:last-child td {
 .lec1-table {
   table-layout: fixed;
   border-collapse: collapse;
-  font-size: 28px;
+  font-size: 24px;
   color: #111;
 }
 
 .lec1-table th,
 .lec1-table td {
   height: 40px;
-  padding: 1px 8px;
+  padding: 1px 4px;
   border: 2px solid #111;
   text-align: center;
   background: #fff;
@@ -219,6 +219,7 @@ tbody tr:last-child td {
 .lec1-table thead th {
   background: #13aee3;
   color: #000;
+  font-size: 18px;
   font-weight: 700;
 }
 

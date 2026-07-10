@@ -337,22 +337,24 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertEqual(result["价体"].tolist(), [0, 1, 9.9, 18.8, 28.8])
         self.assertEqual(source["价体"].tolist(), [0, 100, 990, 1880, 2880])
 
-    def test_uses_latest_order_date_without_counting_intake_day_twice(self):
+    def test_counts_each_day_from_intake_date(self):
         row = pd.Series(
             {
                 "下单日期": pd.Timestamp("2026-07-07"),
                 "进量日期": pd.Timestamp("2026-07-02"),
-                "进度日期": pd.Timestamp("2026-07-07"),
+                "target_time": pd.Timestamp("2026-07-08"),
+                "进度日期": pd.Timestamp("2026-07-03"),
             }
         )
 
-        self.assertAlmostEqual(build_summary.calculate_progress(row), 5 / 6)
+        self.assertAlmostEqual(build_summary.calculate_progress(row), 2 / 6)
 
     def test_counts_intake_date_as_first_progress_day(self):
         row = pd.Series(
             {
                 "下单日期": pd.Timestamp("2026-07-08"),
                 "进量日期": pd.Timestamp("2026-07-08"),
+                "target_time": pd.Timestamp("2026-07-14"),
                 "进度日期": pd.Timestamp("2026-07-08"),
             }
         )
@@ -364,6 +366,7 @@ class SummaryProgressTest(unittest.TestCase):
             {
                 "下单日期": pd.Timestamp("2026-07-01"),
                 "进量日期": pd.Timestamp("2026-07-03"),
+                "target_time": pd.Timestamp("2026-07-09"),
                 "进度日期": pd.Timestamp("2026-07-01"),
             }
         )
@@ -371,6 +374,7 @@ class SummaryProgressTest(unittest.TestCase):
             {
                 "下单日期": pd.Timestamp("2026-07-10"),
                 "进量日期": pd.Timestamp("2026-07-02"),
+                "target_time": pd.Timestamp("2026-07-08"),
                 "进度日期": pd.Timestamp("2026-07-10"),
             }
         )
@@ -383,6 +387,7 @@ class SummaryProgressTest(unittest.TestCase):
             {
                 "下单日期": pd.NaT,
                 "进量日期": pd.Timestamp("2026-07-02"),
+                "target_time": pd.Timestamp("2026-07-08"),
                 "进度日期": pd.NaT,
             }
         )
@@ -425,6 +430,7 @@ class SummaryProgressTest(unittest.TestCase):
             ]
         )
 
+        summary["target_time"] = pd.Timestamp("2026-07-07")
         result = build_summary.add_progress_dates(summary, current_summary)
 
         self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-06-27"))
@@ -449,10 +455,26 @@ class SummaryProgressTest(unittest.TestCase):
             ["学部", "期次", "线索渠道二级分类", "下单日期"]
         ].copy()
 
+        summary["target_time"] = pd.Timestamp("2026-07-07")
         result = build_summary.add_progress_dates(summary, current_summary)
 
         self.assertTrue(pd.isna(result.loc[0, "进度日期"]))
         self.assertTrue(pd.isna(build_summary.calculate_progress(result.loc[0])))
+
+    def test_holds_at_five_sixths_until_target_date(self):
+        base = {
+            "下单日期": pd.Timestamp("2026-07-12"),
+            "进量日期": pd.Timestamp("2026-07-08"),
+            "target_time": pd.Timestamp("2026-07-14"),
+        }
+
+        day_five = pd.Series({**base, "进度日期": pd.Timestamp("2026-07-12")})
+        day_before_target = pd.Series({**base, "进度日期": pd.Timestamp("2026-07-13")})
+        target_day = pd.Series({**base, "进度日期": pd.Timestamp("2026-07-14")})
+
+        self.assertAlmostEqual(build_summary.calculate_progress(day_five), 5 / 6)
+        self.assertAlmostEqual(build_summary.calculate_progress(day_before_target), 5 / 6)
+        self.assertEqual(build_summary.calculate_progress(target_day), 1)
 
     def test_rejects_conflicting_department_term_dates(self):
         target = pd.DataFrame(
