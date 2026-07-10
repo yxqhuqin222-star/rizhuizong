@@ -109,8 +109,8 @@ Measures:
 - `完成率 = 现状 / 目标`
 - `下单日期 = max(下单日期)` within each item, for detail display
 - `进量日期 = max(进量日期)` from target within each item
-- `当前日期 = max(下单日期)` from demo within the same `学部` and `期次`
-- If `当前日期 < 进量日期`, `进度 = 0`; otherwise `进度 = max(当前日期 - 进量日期, 1) / 6`.
+- `当前日期 = max(下单日期)` from demo within the same `学部` and `期次`；三个学部可使用各自不同的最新下单日期。
+- If `当前日期 < 进量日期`, `进度 = 0`; if `进量日期 <= 当前日期 < target_time`, `进度 = min(当前日期 - 进量日期 + 1, 5) / 6`; if `当前日期 >= target_time`, `进度 = 100%`.
 - Progress is clamped to `0%` through `100%`.
 
 Rules:
@@ -121,7 +121,7 @@ Rules:
 - 原始文件中的 `价体` 保持不变；看板、查询结果和导出文件统一显示为原始值除以 100，并去除无意义的小数位，例如 `0→0`、`100→1`、`990→9.9`、`1880→18.8`、`2880→28.8`。
 - All rows in the same `学部` and `期次` use the same current date for progress calculation, regardless of channel, price, or grade.
 - Within one `学部` and `期次`, `target_time` and `进量日期` must each be unique; generation stops with an error if either field has conflicting values.
-- Rows without a department-term current date or `进量日期` have no progress value.
+- Rows without a department-term current date, `target_time`, or `进量日期` have no progress value.
 - Status priority is `未开单` / `仅现状` / `落后` / `已完成`, then `快` when `完成率 - 进度 >= 10` percentage points; remaining rows are `正常`. Only rows with `目标 > 0` can be classified as `落后`. Rows with `目标 = 0` and `现状 > 0` are `仅现状`; rows with `目标 = 0` are not included in the behind count.
 
 #### Default latest-term view
@@ -149,9 +149,10 @@ Daily progress broadcast field mapping:
 - `渠道展示 = 线索渠道二级分类 + 格式化后的价体`
 - `招生目标 = 目标`
 - `进度GAP = 时间进度 - 招生进度`，两个进度均按页面展示口径限制在 `0%–100%`，并保留正负号。
-- `剩余天数 = 总天数 - (target_time - 进量日期 - 1)`
+- 每期按 6 个业务日折算，每周一为业务休息日；`剩余天数 = max(6 - 当前进度阶段, 1)`，其中 `当前进度阶段 = 进度 × 6`。剩余天数与进度使用同一计算结果，不再按自然日期相减。
 - `状态` uses the same classification as the dashboard.
 - Grade rows use business order: 小学二至六年级、初中初一至初三、高中高一至高三。
+- `lec1元占比` 固定统计小学 `暑_10`、支付时间不晚于 `2026-07-09 21:31:07` 的 1 元数据。渠道顺序与目标占比为：YZY 25%、WC 15%、RQ 20%、JJ 8%、SH 12%、ZXC 5%、微转 12%、HFS 3%、YD 0%、爆量本地化 0%；没有目标的渠道目标占比显示 0%，实际占比仍按真实成单量除以全部展示渠道成单量计算。渠道按完整 `last_from` 精确匹配，表中仅展示末三位。
 
 DingTalk broadcast note:
 

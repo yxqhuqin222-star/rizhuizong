@@ -28,12 +28,16 @@ GRADE_ORDER = {
     "高三": 3,
 }
 LEC1_CHANNELS = [
-    ("YZY", "086", 0.35),
-    ("WC", "661", 0.25),
-    ("RQ", "540", 0.19),
-    ("JJ", "967", 0.11),
-    ("SH", "158", 0.03),
-    ("JS", "969", 0.07),
+    ("YZY", "out_wxst_wxstqt_1774944753086", 0.25),
+    ("WC", "out_wxst_wxstqt_1774944782661", 0.15),
+    ("RQ", "out_wxst_wxstqt_1774945025540", 0.20),
+    ("JJ", "out_wxst_wxstqt_1774945094967", 0.08),
+    ("SH", "out_wxst_wxstqt_1774944710158", 0.12),
+    ("ZXC", "out_wxst_wxstqt_1781763514315", 0.05),
+    ("微转", "out_wxst_wxstqt_1774945129110", 0.12),
+    ("HFS", "out_wxst_wxstqt_1781763558917", 0.03),
+    ("YD", "out_wxst_wxstqt_1766038527925", 0.00),
+    ("爆量本地化", "out_wxst_wxstqt_1766038666197", 0.00),
 ]
 
 
@@ -102,13 +106,11 @@ def status_text(target, current, completion, time_progress):
     return "正常"
 
 
-def remaining_days(target_time, intake_date):
-    if pd.isna(target_time) or pd.isna(intake_date):
+def remaining_days(progress):
+    if pd.isna(progress):
         return "--"
-    elapsed_days = (
-        pd.Timestamp(target_time).normalize() - pd.Timestamp(intake_date).normalize()
-    ).days - 1
-    return str(max(0, TOTAL_DAYS - elapsed_days))
+    progress_days = int(round(float(progress) * TOTAL_DAYS))
+    return str(max(TOTAL_DAYS - progress_days, 1))
 
 
 def normalize_summary_frame(df):
@@ -125,7 +127,7 @@ def enrich(df):
     data["渠道展示"] = data.apply(channel_label, axis=1)
     data["进度GAP"] = data.apply(lambda row: progress_gap(row["完成率"], row["进度"]), axis=1)
     data["剩余天数"] = data.apply(
-        lambda row: remaining_days(row["target_time"], row["进量日期"]),
+        lambda row: remaining_days(row["进度"]),
         axis=1,
     )
     return data
@@ -156,7 +158,7 @@ def aggregate_channel(df):
         axis=1,
     )
     grouped["剩余天数"] = grouped.apply(
-        lambda row: remaining_days(row["target_time"], row["进量日期"]),
+        lambda row: remaining_days(row["进度"]),
         axis=1,
     )
     return grouped.sort_values(["期次", "渠道展示"], kind="stable")
@@ -187,7 +189,7 @@ def aggregate_grade(df):
         axis=1,
     )
     grouped["剩余天数"] = grouped.apply(
-        lambda row: remaining_days(row["target_time"], row["进量日期"]),
+        lambda row: remaining_days(row["进度"]),
         axis=1,
     )
     grouped["年级顺序"] = grouped["年级"].map(GRADE_ORDER).fillna(len(GRADE_ORDER) + 1)
@@ -259,7 +261,7 @@ def total_row(df, span_cols):
         "进度": time_progress,
         "状态": status_text(target, current, progress, time_progress),
         "进度GAP": progress_gap_value,
-        "剩余天数": remaining_days(target_time, intake_date),
+        "剩余天数": remaining_days(time_progress),
         "_span_cols": span_cols,
     }
 
@@ -278,7 +280,8 @@ def table_html(title, rows, columns):
     """
 
 
-LEC1_TERM = "暑_8"
+LEC1_TERM = "暑_10"
+LEC1_CUTOFF = pd.Timestamp("2026-07-09 21:31:07")
 
 
 def latest_target_term(df):
@@ -287,21 +290,25 @@ def latest_target_term(df):
     return terms[-1] if terms else None
 
 
-def render_lec1_share(demo):
-    data = demo[
+def filter_lec1_data(demo):
+    return demo[
         demo["学部"].eq("小学")
         & demo["期次"].eq(LEC1_TERM)
         & pd.to_numeric(demo["价体"], errors="coerce").isin([1, 100])
+        & pd.to_datetime(demo["支付时间"], errors="coerce").le(LEC1_CUTOFF)
     ].copy()
-    data["last3"] = data["last_from"].astype(str).str[-3:]
-    totals = data.groupby("last3")["成单量"].sum()
 
-    counts = [int(totals.get(last3, 0)) for _name, last3, _target_share in LEC1_CHANNELS]
+
+def render_lec1_share(demo):
+    data = filter_lec1_data(demo)
+    totals = data.groupby(data["last_from"].astype(str))["成单量"].sum()
+
+    counts = [int(totals.get(last_from, 0)) for _name, last_from, _target_share in LEC1_CHANNELS]
     total = sum(counts)
     actual_shares = [count / total if total else 0 for count in counts]
-    target_shares = [target_share for _name, _last3, target_share in LEC1_CHANNELS]
-    names = [name for name, _last3, _target_share in LEC1_CHANNELS]
-    last_forms = [last3 for _name, last3, _target_share in LEC1_CHANNELS]
+    target_shares = [target_share for _name, _last_from, target_share in LEC1_CHANNELS]
+    names = [name for name, _last_from, _target_share in LEC1_CHANNELS]
+    last_forms = [last_from[-3:] for _name, last_from, _target_share in LEC1_CHANNELS]
 
     def cells(values, formatter, extra_class=""):
         rendered = []
@@ -661,14 +668,14 @@ tbody tr:last-child td {
 .lec1-table {
   table-layout: fixed;
   border-collapse: collapse;
-  font-size: 28px;
+  font-size: 24px;
   color: #111;
 }
 
 .lec1-table th,
 .lec1-table td {
   height: 40px;
-  padding: 1px 8px;
+  padding: 1px 4px;
   border: 2px solid #111;
   text-align: center;
   background: #fff;
@@ -679,6 +686,7 @@ tbody tr:last-child td {
 .lec1-table thead th {
   background: #13aee3;
   color: #000;
+  font-size: 18px;
   font-weight: 700;
 }
 
