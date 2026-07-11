@@ -2,6 +2,8 @@
 
 读取每日 `tongji_demo.xlsx` 和每周 `tongji_target.xlsx`，生成进度汇总、网页看板和学部播报图，并支持规则化自然语言查询。
 
+![日追踪看板最终实现图](./docs/dashboard-implementation.png)
+
 产品需求和计算口径以 [PRD](./docs/PRD-progress-dashboard.md) 为准，历史变更见 [CHANGELOG](./docs/CHANGELOG.md)。
 
 ## 目录
