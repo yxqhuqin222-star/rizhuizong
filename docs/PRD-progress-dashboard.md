@@ -61,6 +61,7 @@ The current prototype is:
 
 - [design-demos/summary_dashboard_v1.html](../design-demos/summary_dashboard_v1.html)
 - [design-demos/summary_dashboard_v1.png](../design-demos/summary_dashboard_v1.png)
+- [design-demos/live_dashboard_with_dingtalk.png](../design-demos/live_dashboard_with_dingtalk.png)
 
 V1 layout:
 
