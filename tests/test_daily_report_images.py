@@ -4,10 +4,10 @@ import pandas as pd
 
 from reports.build_daily_report_images import (
     LEC1_CHANNELS,
-    LEC1_CUTOFF,
     LEC1_TERM,
     channel_label,
     filter_lec1_data,
+    lec1_channel_counts,
     progress_gap,
     remaining_days,
     render_rows,
@@ -64,20 +64,111 @@ class Lec1ChannelsTest(unittest.TestCase):
         )
         self.assertAlmostEqual(sum(channel[2] for channel in LEC1_CHANNELS), 1.0)
 
-    def test_scope_uses_confirmed_term_and_cutoff(self):
+    def test_scope_matches_progress_summary_without_payment_cutoff(self):
         demo = pd.DataFrame(
             [
-                {"学部": "小学", "期次": "暑_10", "价体": 100, "支付时间": LEC1_CUTOFF},
-                {"学部": "小学", "期次": "暑_10", "价体": 100, "支付时间": LEC1_CUTOFF + pd.Timedelta(seconds=1)},
-                {"学部": "小学", "期次": "暑_8", "价体": 100, "支付时间": LEC1_CUTOFF},
+                {
+                    "学部": "小学",
+                    "期次": "暑_10",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "下单日期": "2026-07-09",
+                    "支付时间": "2026-07-10 10:00:00",
+                    "custom_uid": "u1",
+                    "last_from": "out_wxst_wxstqt_1774944753086",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_8",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "下单日期": "2026-07-09",
+                    "支付时间": "2026-07-10 10:00:00",
+                    "custom_uid": "u2",
+                    "last_from": "out_wxst_wxstqt_1774944753086",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_10",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "下单日期": "2026-07-08",
+                    "支付时间": "2026-07-08 10:00:00",
+                    "custom_uid": "u3",
+                    "last_from": "out_wxst_wxstqt_1774944753086",
+                },
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_10",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "目标": 100,
+                    "target_time": "2026-07-15",
+                    "进量日期": "2026-07-09",
+                },
             ]
         )
 
-        result = filter_lec1_data(demo)
+        result = filter_lec1_data(demo, target)
 
         self.assertEqual(LEC1_TERM, "暑_10")
         self.assertEqual(len(result), 1)
-        self.assertEqual(result.iloc[0]["支付时间"], LEC1_CUTOFF)
+        self.assertEqual(result.iloc[0]["custom_uid"], "u1")
+
+    def test_unmatched_external_transfer_is_counted_in_mapped_last_from_after_assignment(self):
+        demo = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_10",
+                    "线索渠道二级分类": "外部微转-测试",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "下单日期": "2026-07-09",
+                    "custom_uid": "u1",
+                    "last_from": "out_wxst_wxstqt_1774945129110",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_10",
+                    "线索渠道二级分类": "外部微转-测试",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "下单日期": "2026-07-09",
+                    "custom_uid": "u1",
+                    "last_from": "out_wxst_wxstqt_1774945129110",
+                },
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_10",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "目标": 100,
+                    "target_time": "2026-07-15",
+                    "进量日期": "2026-07-09",
+                },
+            ]
+        )
+
+        result = filter_lec1_data(demo, target)
+        counts = lec1_channel_counts(result)
+        micro_transfer_index = [name for name, _code, _share in LEC1_CHANNELS].index("微转")
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(counts[micro_transfer_index], 1)
 
 
 class StatusTextTest(unittest.TestCase):

@@ -11,6 +11,7 @@ import pandas as pd
 ROOT = Path("/Users/kityhello/workplace/project/rizhuizong")
 SUMMARY_PATH = ROOT / "outputs" / "tongji_summary" / "tongji_summary_current.xlsx"
 DEMO_PATH = ROOT / "tongji_demo.xlsx"
+TARGET_PATH = ROOT / "tongji_target.xlsx"
 OUT_DIR = ROOT / "reports" / "daily_progress"
 TOTAL_DAYS = 6
 DEPARTMENTS = ["小学", "初中", "高中"]
@@ -281,7 +282,6 @@ def table_html(title, rows, columns):
 
 
 LEC1_TERM = "暑_10"
-LEC1_CUTOFF = pd.Timestamp("2026-07-09 21:31:07")
 
 
 def latest_target_term(df):
@@ -290,20 +290,80 @@ def latest_target_term(df):
     return terms[-1] if terms else None
 
 
-def filter_lec1_data(demo):
-    return demo[
-        demo["学部"].eq("小学")
-        & demo["期次"].eq(LEC1_TERM)
-        & pd.to_numeric(demo["价体"], errors="coerce").isin([1, 100])
-        & pd.to_datetime(demo["支付时间"], errors="coerce").le(LEC1_CUTOFF)
+def normalize_report_channel(value):
+    if isinstance(value, str) and value.startswith("外部微转-"):
+        return "外部微转-*"
+    return value
+
+
+def assign_summary_channel(row, exact_target_keys, fallback_channels):
+    channel = normalize_report_channel(row["线索渠道二级分类"])
+    exact_key = (row["学部"], row["期次"], channel, row["价体"], row["年级"])
+    if exact_key in exact_target_keys or channel == "常规外呼":
+        return channel
+
+    fallback_key = (row["学部"], row["期次"], row["价体"], row["年级"])
+    candidates = fallback_channels.get(fallback_key, set())
+    if len(candidates) == 1:
+        return next(iter(candidates))
+    if len(candidates) > 1:
+        if "常规外呼" in candidates:
+            return "常规外呼"
+        if "LEC内测" in candidates:
+            return "LEC内测"
+    return channel
+
+
+def filter_lec1_data(demo, target):
+    data = demo.copy()
+    data["下单日期"] = pd.to_datetime(data["下单日期"], errors="coerce").dt.normalize()
+
+    target_data = target.copy()
+    target_data["线索渠道二级分类"] = target_data["线索渠道二级分类"].map(normalize_report_channel)
+    target_data["进量日期"] = pd.to_datetime(
+        target_data["进量日期"],
+        errors="coerce",
+    ).dt.normalize()
+    intake_dates = (
+        target_data.groupby(["学部", "期次"], dropna=False, as_index=False)["进量日期"]
+        .max()
+        .rename(columns={"进量日期": "目标进量日期"})
+    )
+    data = data.merge(intake_dates, on=["学部", "期次"], how="left")
+    data = data[data["目标进量日期"].isna() | data["下单日期"].ge(data["目标进量日期"])].copy()
+
+    exact_target_keys = set()
+    fallback_channels = {}
+    for row in target_data[["学部", "期次", "线索渠道二级分类", "价体", "年级"]].itertuples(index=False, name=None):
+        exact_target_keys.add(row)
+        fallback_key = (row[0], row[1], row[3], row[4])
+        fallback_channels.setdefault(fallback_key, set()).add(row[2])
+
+    data["归属后渠道"] = data.apply(
+        lambda row: assign_summary_channel(row, exact_target_keys, fallback_channels),
+        axis=1,
+    )
+    return data[
+        data["学部"].eq("小学")
+        & data["期次"].eq(LEC1_TERM)
+        & data["归属后渠道"].eq("LEC内测")
+        & pd.to_numeric(data["价体"], errors="coerce").eq(100)
     ].copy()
 
 
-def render_lec1_share(demo):
-    data = filter_lec1_data(demo)
-    totals = data.groupby(data["last_from"].astype(str))["成单量"].sum()
+def lec1_channel_counts(data):
+    data = data.copy()
+    data["_custom_uid_key"] = [
+        ("custom_uid", value) if pd.notna(value) else ("missing_row", position)
+        for position, value in enumerate(data["custom_uid"])
+    ]
+    totals = data.groupby(data["last_from"].astype(str))["_custom_uid_key"].nunique()
+    return [int(totals.get(last_from, 0)) for _name, last_from, _target_share in LEC1_CHANNELS]
 
-    counts = [int(totals.get(last_from, 0)) for _name, last_from, _target_share in LEC1_CHANNELS]
+
+def render_lec1_share(demo, target):
+    data = filter_lec1_data(demo, target)
+    counts = lec1_channel_counts(data)
     total = sum(counts)
     actual_shares = [count / total if total else 0 for count in counts]
     target_shares = [target_share for _name, _last_from, target_share in LEC1_CHANNELS]
@@ -351,7 +411,7 @@ def render_lec1_share(demo):
     <header>
       <div>
         <h1>{html.escape(title)}</h1>
-        <p>范围：小学 · {html.escape(LEC1_TERM)} · 1元 · 生成日期：{pd.Timestamp.today().strftime("%Y-%m-%d")}</p>
+        <p>范围：小学 · {html.escape(LEC1_TERM)} · LEC内测 · 1元 · 同进度表口径 · 生成日期：{pd.Timestamp.today().strftime("%Y-%m-%d")}</p>
       </div>
       <div class="metrics">
         <div><span>渠道合计</span><b>{int_text(total)}</b></div>
@@ -376,7 +436,7 @@ def render_lec1_share(demo):
         "html": str(html_path),
         "png": str(OUT_DIR / "lec1_share.png"),
         "summary": {
-            "范围": f"小学 {LEC1_TERM} 1元",
+            "范围": f"小学 {LEC1_TERM} LEC内测 1元 同进度表口径",
             "成单量": str(total),
             "实际占比": "；".join(f"{name}={pct_text(share)}" for name, share in zip(names, actual_shares)),
         },
@@ -450,6 +510,7 @@ def main():
     (OUT_DIR / "report.css").write_text(CSS, encoding="utf-8")
     df = normalize_summary_frame(pd.read_excel(SUMMARY_PATH, sheet_name="目标现状对比", header=1))
     demo = pd.read_excel(DEMO_PATH, sheet_name="rizhuizong_city (17)")
+    target = pd.read_excel(TARGET_PATH, sheet_name="Sheet1")
     outputs = []
     for dept in DEPARTMENTS:
         dept_df = df[df["学部"].eq(dept)].copy()
@@ -458,7 +519,7 @@ def main():
         output = render_department(dept, dept_df)
         if output:
             outputs.append(output)
-    lec1_output = render_lec1_share(demo)
+    lec1_output = render_lec1_share(demo, target)
     if lec1_output:
         outputs.append(lec1_output)
     (OUT_DIR / "manifest.json").write_text(json.dumps(outputs, ensure_ascii=False, indent=2), encoding="utf-8")
