@@ -111,6 +111,8 @@ def remaining_days(progress):
     if pd.isna(progress):
         return "--"
     progress_days = int(round(float(progress) * TOTAL_DAYS))
+    if progress_days >= TOTAL_DAYS:
+        return "0"
     return str(max(TOTAL_DAYS - progress_days, 1))
 
 

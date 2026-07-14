@@ -20,7 +20,9 @@ class RemainingDaysTest(unittest.TestCase):
         self.assertEqual(remaining_days(1 / 6), "5")
         self.assertEqual(remaining_days(2 / 6), "4")
         self.assertEqual(remaining_days(5 / 6), "1")
-        self.assertEqual(remaining_days(1), "1")
+
+    def test_target_day_has_zero_remaining_days(self):
+        self.assertEqual(remaining_days(1), "0")
 
     def test_missing_date_has_no_value(self):
         self.assertEqual(remaining_days(pd.NA), "--")
