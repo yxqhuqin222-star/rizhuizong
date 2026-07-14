@@ -361,6 +361,18 @@ class SummaryProgressTest(unittest.TestCase):
 
         self.assertAlmostEqual(build_summary.calculate_progress(row), 1 / 6)
 
+    def test_monday_rest_day_does_not_advance_progress(self):
+        row = pd.Series(
+            {
+                "下单日期": pd.Timestamp("2026-07-13"),
+                "进量日期": pd.Timestamp("2026-07-09"),
+                "target_time": pd.Timestamp("2026-07-15"),
+                "进度日期": pd.Timestamp("2026-07-13"),
+            }
+        )
+
+        self.assertAlmostEqual(build_summary.calculate_progress(row), 4 / 6)
+
     def test_clamps_progress_to_zero_and_one(self):
         before_intake = pd.Series(
             {

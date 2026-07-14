@@ -23,7 +23,7 @@ The original Excel workflow has been implemented as a local web dashboard so dai
 
 ## 4. Objective
 
-The objective is to build a local web dashboard that makes latest-term progress easy to inspect after each daily data upload.
+The objective is to build a local web dashboard that makes latest-term progress easy to inspect and broadcast after each daily data upload.
 
 ### Key Results
 
@@ -32,6 +32,7 @@ The objective is to build a local web dashboard that makes latest-term progress 
 - KR3: The user can switch to all terms through filtering.
 - KR4: The user can export latest-term summary, full summary, and query results.
 - KR5: A date + `last_from` natural-language query returns `sum(成单量)` with matched row count.
+- KR6: The user can generate department broadcast images and send them to the DingTalk group robot from the dashboard.
 
 ## 5. Market Segment(s)
 
@@ -51,6 +52,7 @@ The dashboard helps the user:
 - See the latest active term first.
 - Keep historical terms available but out of the default view.
 - Export data for follow-up work.
+- Send daily progress images to the operating group without manually assembling screenshots.
 - Ask simple natural-language questions without manually filtering raw Excel rows.
 
 ## 7. Solution
@@ -111,7 +113,7 @@ Measures:
 - `下单日期 = max(下单日期)` within each item, for detail display
 - `进量日期 = max(进量日期)` from target within each item
 - `当前日期 = max(下单日期)` from demo within the same `学部` and `期次`；三个学部可使用各自不同的最新下单日期。
-- If `当前日期 < 进量日期`, `进度 = 0`; if `进量日期 <= 当前日期 < target_time`, `进度 = min(当前日期 - 进量日期 + 1, 5) / 6`; if `当前日期 >= target_time`, `进度 = 100%`.
+- If `当前日期 < 进量日期`, `进度 = 0`; if `进量日期 <= 当前日期 < target_time`, `进度 = min(业务进度日数, 5) / 6`，其中业务进度日从 `进量日期` 到 `当前日期` 按天计数、周一休息不计入；if `当前日期 >= target_time`, `进度 = 100%`.
 - Progress is clamped to `0%` through `100%`.
 
 Rules:
@@ -144,13 +146,34 @@ Rules:
 - Broadcast daily progress images for `小学`, `初中`, and `高中` to the DingTalk group robot.
 - Image downloads open in a new browser tab and leave the dashboard open.
 
+#### Daily broadcast images and DingTalk delivery
+
+The dashboard treats daily broadcast as a core delivery flow, not only as file export. After `demo` or `target` is reloaded successfully, the system regenerates Summary, workbook output, and all broadcast images from the same calculation result before reporting success.
+
+Broadcast image outputs:
+
+- `小学每日招生进度播报`: [reports/daily_progress/primary_daily_progress.png](../reports/daily_progress/primary_daily_progress.png)
+- `初中每日招生进度播报`: [reports/daily_progress/middle_daily_progress.png](../reports/daily_progress/middle_daily_progress.png)
+- `高中每日招生进度播报`: [reports/daily_progress/high_daily_progress.png](../reports/daily_progress/high_daily_progress.png)
+- `lec1元占比播报`: [reports/daily_progress/lec1_share.png](../reports/daily_progress/lec1_share.png)
+
+Dashboard prototype with DingTalk controls:
+
+- [design-demos/live_dashboard_with_dingtalk.png](../design-demos/live_dashboard_with_dingtalk.png)
+
+User actions:
+
+- Download `小学`, `初中`, `高中`, and `lec1元占比` broadcast images from the dashboard.
+- Send `小学`, `初中`, `高中`, and `lec1元占比` broadcast images to the DingTalk group robot.
+- Keep the dashboard page open when opening or downloading broadcast images.
+
 Daily progress broadcast field mapping:
 
 - Scope: only each department's latest `期次` from the `target` table; historical terms and demo-only newer terms are not shown in broadcast images.
 - `渠道展示 = 线索渠道二级分类 + 格式化后的价体`
 - `招生目标 = 目标`
 - `进度GAP = 时间进度 - 招生进度`，两个进度均按页面展示口径限制在 `0%–100%`，并保留正负号。
-- 每期按 6 个业务日折算，每周一为业务休息日；`剩余天数 = max(6 - 当前进度阶段, 1)`，其中 `当前进度阶段 = 进度 × 6`。剩余天数与进度使用同一计算结果，不再按自然日期相减。
+- 每期按 6 个业务日折算，每周一为业务休息日；目标日及以后 `剩余天数 = 0`，目标日前 `剩余天数 = max(6 - 当前进度阶段, 1)`，其中 `当前进度阶段 = 进度 × 6`。剩余天数与进度使用同一计算结果，不再按自然日期相减。
 - `状态` uses the same classification as the dashboard.
 - Grade rows use business order: 小学二至六年级、初中初一至初三、高中高一至高三。
 - `lec1元占比` 固定统计小学 `暑_10`、`LEC内测`、1 元数据，过滤、渠道归属和去重口径与进度表 `现状` 一致：按学部期次进量日期过滤，未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与目标占比为：YZY 25%、WC 15%、RQ 20%、JJ 8%、SH 12%、ZXC 5%、微转 12%、HFS 3%、YD 0%、爆量本地化 0%；没有目标的渠道目标占比显示 0%，实际占比按各展示渠道成单量除以全部展示渠道成单量计算。渠道按完整 `last_from` 精确匹配，表中仅展示末三位。
@@ -159,6 +182,8 @@ DingTalk broadcast note:
 
 - The custom robot sends a markdown image message with the required keyword `成单`.
 - For group members to render the image reliably, the image URL should be reachable from DingTalk clients. Configure `DINGTALK_REPORT_BASE_URL` when the local service is exposed through an accessible host.
+- If the image must be uploaded before DingTalk delivery, configure `REPORT_IMAGE_UPLOAD_URL` and `REPORT_UPLOAD_TOKEN`.
+- The DingTalk webhook is configured with `DINGTALK_WEBHOOK`; missing configuration should produce a clear local error instead of silently reporting success.
 
 #### Natural-language query V1
 
@@ -229,6 +254,9 @@ No database, login, external API, or cloud service is required for V1.
 - Query examples return the expected total, matched-row count, and export rows.
 - Latest/full/query downloads return valid files.
 - Broadcast image downloads return valid PNG files generated from the latest Summary.
+- Broadcast sample images listed in this PRD exist and are generated from the current Summary.
+- DingTalk broadcast payload uses a markdown image message, includes the keyword `成单`, and uses an image URL reachable by DingTalk clients when real group delivery is enabled.
+- DingTalk payload generation can be verified without sending a real group message.
 - The running service returns a healthy response from `/api/health`.
 - Production `/api/state` and `/download/workbook` can serve the latest synced cloud copy, with static build output as fallback.
 
