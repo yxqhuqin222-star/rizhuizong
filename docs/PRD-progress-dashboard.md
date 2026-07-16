@@ -107,7 +107,7 @@ Dimensions:
 Measures:
 
 - `目标 = sum(目标)`
-- `现状 = count(distinct custom_uid)` within each complete statistical dimension after excluding demo rows whose `下单日期` is earlier than the same `学部` and `期次` target `进量日期`; rows without `custom_uid` are counted separately.
+- `现状 = count(distinct custom_uid)` within each complete statistical dimension for all demo rows in the same `学部` and `期次`; do not exclude rows earlier than target `进量日期`; rows without `custom_uid` are counted separately.
 - `差距 = 现状 - 目标`
 - `完成率 = 现状 / 目标`
 - `下单日期 = max(下单日期)` within each item, for detail display
@@ -119,8 +119,8 @@ Measures:
 Rules:
 
 - `线索渠道二级分类` values beginning with `外部微转-` are grouped as `外部微转-*`.
-- demo 中的 `常规外呼` 按完整统计维度无法命中 target 时保留为仅现状项，不改归其他渠道。其他渠道无法命中时，改用同一 `学部`、`期次`、`价体`、`年级`寻找 target 渠道；只有一个候选时归入唯一候选，多个候选时优先归入 `常规外呼`，没有 `常规外呼` 时归入 `LEC内测`，两个优先渠道都不存在时停止生成并报错，没有候选时保留为仅现状项。
-- When a `demo` row belongs to a `学部` and `期次` that has a target `进量日期`, count it only if `下单日期 >= 进量日期`. `demo` rows without a matching department-term target intake date are kept as current-only rows.
+- demo 中的 `常规外呼` 按完整统计维度无法命中 target 时保留为仅现状项，不改归其他渠道。其他渠道无法命中时，改用同一 `学部`、`期次`、`价体`、`年级`寻找 target 渠道；只有一个候选时归入唯一候选，多个候选时优先归入 `常规外呼`，没有 `常规外呼` 时归入 `LEC内测`，两个优先渠道都不存在时归入 `未报量`，没有候选时保留为仅现状项。
+- `现状` and `成单量` are counted by `学部` and `期次` regardless of target `进量日期`; `进量日期` continues to drive only `进度`, `时间进度`, and `剩余天数`.
 - 原始文件中的 `价体` 保持不变；看板、查询结果和导出文件统一显示为原始值除以 100，并去除无意义的小数位，例如 `0→0`、`100→1`、`990→9.9`、`1880→18.8`、`2880→28.8`。
 - All rows in the same `学部` and `期次` use the same current date for progress calculation, regardless of channel, price, or grade.
 - Within one `学部` and `期次`, `target_time` and `进量日期` must each be unique; generation stops with an error if either field has conflicting values.
@@ -176,7 +176,7 @@ Daily progress broadcast field mapping:
 - 每期按 6 个业务日折算，每周一为业务休息日；目标日及以后 `剩余天数 = 0`，目标日前 `剩余天数 = max(6 - 当前进度阶段, 1)`，其中 `当前进度阶段 = 进度 × 6`。剩余天数与进度使用同一计算结果，不再按自然日期相减。
 - `状态` uses the same classification as the dashboard.
 - Grade rows use business order: 小学二至六年级、初中初一至初三、高中高一至高三。
-- `lec1元占比` 固定统计小学 `暑_10`、`LEC内测`、1 元数据，过滤、渠道归属和去重口径与进度表 `现状` 一致：按学部期次进量日期过滤，未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与目标占比为：YZY 25%、WC 15%、RQ 20%、JJ 8%、SH 12%、ZXC 5%、微转 12%、HFS 3%、YD 0%、爆量本地化 0%；没有目标的渠道目标占比显示 0%，实际占比按各展示渠道成单量除以全部展示渠道成单量计算。渠道按完整 `last_from` 精确匹配，表中仅展示末三位。
+- `lec1元占比` 固定统计小学 `暑_10`、`LEC内测`、1 元数据，渠道归属和去重口径与进度表 `现状` 一致：按学部期次全量统计，不按进量日期过滤；未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与目标占比为：YZY 25%、WC 15%、RQ 20%、JJ 8%、SH 12%、ZXC 5%、微转 12%、HFS 3%、YD 0%、爆量本地化 0%；没有目标的渠道目标占比显示 0%，实际占比按各展示渠道成单量除以全部展示渠道成单量计算。渠道按完整 `last_from` 精确匹配，表中仅展示末三位。
 
 DingTalk broadcast note:
 
