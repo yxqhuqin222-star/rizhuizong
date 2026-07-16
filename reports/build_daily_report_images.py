@@ -313,6 +313,7 @@ def assign_summary_channel(row, exact_target_keys, fallback_channels):
             return "常规外呼"
         if "LEC内测" in candidates:
             return "LEC内测"
+        return "未报量"
     return channel
 
 
@@ -322,17 +323,6 @@ def filter_lec1_data(demo, target):
 
     target_data = target.copy()
     target_data["线索渠道二级分类"] = target_data["线索渠道二级分类"].map(normalize_report_channel)
-    target_data["进量日期"] = pd.to_datetime(
-        target_data["进量日期"],
-        errors="coerce",
-    ).dt.normalize()
-    intake_dates = (
-        target_data.groupby(["学部", "期次"], dropna=False, as_index=False)["进量日期"]
-        .max()
-        .rename(columns={"进量日期": "目标进量日期"})
-    )
-    data = data.merge(intake_dates, on=["学部", "期次"], how="left")
-    data = data[data["目标进量日期"].isna() | data["下单日期"].ge(data["目标进量日期"])].copy()
 
     exact_target_keys = set()
     fallback_channels = {}

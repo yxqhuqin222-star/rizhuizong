@@ -93,7 +93,7 @@ class SummaryProgressTest(unittest.TestCase):
 
         self.assertEqual(result.loc[0, "现状"], 2)
 
-    def test_filters_current_rows_before_department_term_intake_date(self):
+    def test_counts_current_rows_before_intake_date_but_progress_still_uses_intake(self):
         demo = pd.DataFrame(
             [
                 {
@@ -105,26 +105,7 @@ class SummaryProgressTest(unittest.TestCase):
                     "custom_uid": "before-intake",
                     "成单量": 1,
                     "下单日期": "2026-07-01",
-                },
-                {
-                    "学部": "小学",
-                    "期次": "暑_9",
-                    "线索渠道二级分类": "LLM外呼",
-                    "价体": 990,
-                    "年级": "三年级",
-                    "custom_uid": "on-intake",
-                    "成单量": 1,
-                    "下单日期": "2026-07-02",
-                },
-                {
-                    "学部": "小学",
-                    "期次": "暑_10",
-                    "线索渠道二级分类": "LLM外呼",
-                    "价体": 990,
-                    "年级": "三年级",
-                    "custom_uid": "demo-only-term",
-                    "成单量": 1,
-                    "下单日期": "2026-07-01",
+                    "last_from": "source-a",
                 },
             ]
         )
@@ -143,9 +124,12 @@ class SummaryProgressTest(unittest.TestCase):
             ]
         )
 
-        result = build_summary.filter_current_by_intake_date(demo, target)
+        summary, _current_summary, _target_summary = build_summary.build_summary(demo, target)
 
-        self.assertEqual(result["custom_uid"].tolist(), ["on-intake", "demo-only-term"])
+        self.assertEqual(summary.loc[0, "现状"], 1)
+        self.assertEqual(summary.loc[0, "下单日期"], "2026-07-01")
+        self.assertEqual(summary.loc[0, "进量日期"], "2026-07-02")
+        self.assertEqual(summary.loc[0, "进度"], 0)
 
     def test_assigns_unmatched_channel_when_target_candidate_is_unique(self):
         current = pd.DataFrame(
@@ -294,7 +278,7 @@ class SummaryProgressTest(unittest.TestCase):
 
         self.assertEqual(result.loc[0, "线索渠道二级分类"], "LEC内测")
 
-    def test_rejects_multiple_candidates_without_preferred_channel(self):
+    def test_assigns_unreported_when_multiple_candidates_have_no_preferred_channel(self):
         current = pd.DataFrame(
             [
                 {
@@ -327,8 +311,10 @@ class SummaryProgressTest(unittest.TestCase):
             ]
         )
 
-        with self.assertRaisesRegex(ValueError, "不含常规外呼或LEC内测"):
-            build_summary.assign_unmatched_current_channels(current, target)
+        result = build_summary.assign_unmatched_current_channels(current, target)
+
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "未报量")
+        self.assertEqual(result.loc[0, "现状"], 7)
     def test_formats_payment_for_display_without_changing_source(self):
         source = pd.DataFrame({"价体": [0, 100, 990, 1880, 2880]})
 

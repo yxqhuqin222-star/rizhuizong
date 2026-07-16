@@ -66,7 +66,7 @@ class Lec1ChannelsTest(unittest.TestCase):
         )
         self.assertAlmostEqual(sum(channel[2] for channel in LEC1_CHANNELS), 1.0)
 
-    def test_scope_matches_progress_summary_without_payment_cutoff(self):
+    def test_scope_matches_progress_summary_without_payment_or_intake_cutoff(self):
         demo = pd.DataFrame(
             [
                 {
@@ -122,8 +122,7 @@ class Lec1ChannelsTest(unittest.TestCase):
         result = filter_lec1_data(demo, target)
 
         self.assertEqual(LEC1_TERM, "暑_10")
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result.iloc[0]["custom_uid"], "u1")
+        self.assertEqual(result["custom_uid"].tolist(), ["u1", "u3"])
 
     def test_unmatched_external_transfer_is_counted_in_mapped_last_from_after_assignment(self):
         demo = pd.DataFrame(

@@ -6,21 +6,21 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.png",
     "summary": {
       "目标": "15250",
-      "成单量": "11918",
-      "完成率": "0.7815081967213114",
-      "平均进度": "0.6666666666666666"
+      "成单量": "14632",
+      "完成率": "0.9594754098360656",
+      "平均进度": "1.0"
     }
   },
   {
     "dept": "初中",
-    "term": "暑_12",
+    "term": "暑_13",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.png",
     "summary": {
-      "目标": "10080",
-      "成单量": "8886",
-      "完成率": "0.881547619047619",
-      "平均进度": "0.8333333333333334"
+      "目标": "9680",
+      "成单量": "1948",
+      "完成率": "0.2012396694214876",
+      "平均进度": "0.16666666666666663"
     }
   },
   {
@@ -30,9 +30,9 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.png",
     "summary": {
       "目标": "6560",
-      "成单量": "4838",
-      "完成率": "0.7375",
-      "平均进度": "0.6666666666666665"
+      "成单量": "6349",
+      "完成率": "0.9678353658536586",
+      "平均进度": "0.8333333333333336"
     }
   },
   {
@@ -42,8 +42,8 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.png",
     "summary": {
       "范围": "小学 暑_10 LEC内测 1元 同进度表口径",
-      "成单量": "9951",
-      "实际占比": "YZY=30%；WC=15%；RQ=20%；JJ=8%；SH=17%；ZXC=0%；微转=9%；HFS=0%；YD=1%；爆量本地化=0%"
+      "成单量": "11332",
+      "实际占比": "YZY=30%；WC=17%；RQ=19%；JJ=8%；SH=17%；ZXC=0%；微转=8%；HFS=0%；YD=1%；爆量本地化=0%"
     }
   }
 ]
