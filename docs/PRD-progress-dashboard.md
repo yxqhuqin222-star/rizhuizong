@@ -155,7 +155,7 @@ Broadcast image outputs:
 - `小学每日招生进度播报`: [reports/daily_progress/primary_daily_progress.png](../reports/daily_progress/primary_daily_progress.png)
 - `初中每日招生进度播报`: [reports/daily_progress/middle_daily_progress.png](../reports/daily_progress/middle_daily_progress.png)
 - `高中每日招生进度播报`: [reports/daily_progress/high_daily_progress.png](../reports/daily_progress/high_daily_progress.png)
-- `lec1元占比播报`: [reports/daily_progress/lec1_share.png](../reports/daily_progress/lec1_share.png)
+- `lec内测小学量级播报`: [reports/daily_progress/lec1_share.png](../reports/daily_progress/lec1_share.png)
 
 Dashboard prototype with DingTalk controls:
 
@@ -163,8 +163,8 @@ Dashboard prototype with DingTalk controls:
 
 User actions:
 
-- Download `小学`, `初中`, `高中`, and `lec1元占比` broadcast images from the dashboard.
-- Send `小学`, `初中`, `高中`, and `lec1元占比` broadcast images to the DingTalk group robot.
+- Download `小学`, `初中`, `高中`, and `lec内测小学量级` broadcast images from the dashboard.
+- Send `小学`, `初中`, `高中`, and `lec内测小学量级` broadcast images to the DingTalk group robot.
 - Keep the dashboard page open when opening or downloading broadcast images.
 
 Daily progress broadcast field mapping:
@@ -176,7 +176,7 @@ Daily progress broadcast field mapping:
 - 每期按 6 个业务日折算，每周一为业务休息日；目标日及以后 `剩余天数 = 0`，目标日前 `剩余天数 = max(6 - 当前进度阶段, 1)`，其中 `当前进度阶段 = 进度 × 6`。剩余天数与进度使用同一计算结果，不再按自然日期相减。
 - `状态` uses the same classification as the dashboard.
 - Grade rows use business order: 小学二至六年级、初中初一至初三、高中高一至高三。
-- `lec1元占比` 固定统计小学 `暑_10`、`LEC内测`、1 元数据，渠道归属和去重口径与进度表 `现状` 一致：按学部期次全量统计，不按进量日期过滤；未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与目标占比为：YZY 25%、WC 15%、RQ 20%、JJ 8%、SH 12%、ZXC 5%、微转 12%、HFS 3%、YD 0%、爆量本地化 0%；没有目标的渠道目标占比显示 0%，实际占比按各展示渠道成单量除以全部展示渠道成单量计算。渠道按完整 `last_from` 精确匹配，表中仅展示末三位。
+- `lec内测小学量级` 固定统计小学 `暑_11`、`LEC内测`、1 元和 9.9 元数据，渠道归属和去重口径与进度表 `现状` 一致：按学部期次全量统计，不按进量日期过滤；未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与报量为：YZY 2900、WC 1000、RQ 1000、JJ 1000、SH9.9 600；`进量` 直接取对应渠道的 1 元和 9.9 元成单量合计，渠道按完整 `last_from` 精确匹配。`目标占比` 固定为 YZY 49%、WC 17%、RQ 17%、JJ 17%、SH9.9 100%；`实际占比` 中 YZY/WC/RQ/JJ 仅按 1 元价体计算且分母不含 SH9.9，SH9.9 按 9.9 元单独展示为 100%。
 
 DingTalk broadcast note:
 

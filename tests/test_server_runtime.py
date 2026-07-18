@@ -4,6 +4,7 @@ import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import URLError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
@@ -69,6 +70,28 @@ class ServerRuntimeTest(unittest.TestCase):
 
         self.assertFalse(result["ok"])
         self.assertTrue(result["skipped"])
+
+    def test_online_request_retries_transient_connection_refusal(self):
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"ok": true}'
+        response.__enter__.return_value.headers = {}
+
+        with (
+            patch(
+                "app.urlopen",
+                side_effect=[URLError(ConnectionRefusedError(61, "Connection refused")), response],
+            ) as mocked_urlopen,
+            patch("app.time.sleep") as mocked_sleep,
+        ):
+            result = app.post_online_bytes(
+                "https://example.test/api/state",
+                b'{"summary":[],"latestSummary":[],"metrics":{}}',
+                "application/json; charset=utf-8",
+            )
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(mocked_urlopen.call_count, 2)
+        mocked_sleep.assert_called_once_with(1)
 
     def test_file_info_uses_recorded_upload_time_not_file_mtime(self):
         with tempfile.TemporaryDirectory() as temp_dir:
