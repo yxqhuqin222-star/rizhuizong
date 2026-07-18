@@ -1,14 +1,14 @@
 [
   {
     "dept": "小学",
-    "term": "暑_10",
+    "term": "暑_11",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.png",
     "summary": {
-      "目标": "15250",
-      "成单量": "14632",
-      "完成率": "0.9594754098360656",
-      "平均进度": "1.0"
+      "目标": "9800",
+      "成单量": "3812",
+      "完成率": "0.3889795918367347",
+      "平均进度": "0.33333333333333326"
     }
   },
   {
@@ -18,32 +18,34 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.png",
     "summary": {
       "目标": "9680",
-      "成单量": "1948",
-      "完成率": "0.2012396694214876",
-      "平均进度": "0.16666666666666663"
+      "成单量": "5231",
+      "完成率": "0.5403925619834711",
+      "平均进度": "0.5"
     }
   },
   {
     "dept": "高中",
-    "term": "暑_13",
+    "term": "暑_14",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.png",
     "summary": {
-      "目标": "6560",
-      "成单量": "6349",
-      "完成率": "0.9678353658536586",
-      "平均进度": "0.8333333333333336"
+      "目标": "7280",
+      "成单量": "2361",
+      "完成率": "0.3243131868131868",
+      "平均进度": "1.0"
     }
   },
   {
     "dept": "lec1",
-    "term": "暑_10",
+    "term": "暑_11",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.png",
     "summary": {
-      "范围": "小学 暑_10 LEC内测 1元 同进度表口径",
-      "成单量": "11332",
-      "实际占比": "YZY=30%；WC=17%；RQ=19%；JJ=8%；SH=17%；ZXC=0%；微转=8%；HFS=0%；YD=1%；爆量本地化=0%"
+      "范围": "小学 暑_11 LEC内测 1元+9.9元 同进度表口径",
+      "报量": "6500",
+      "进量": "2800",
+      "渠道进量": "YZY=1,348；WC=291；RQ=729；JJ=173；SH9.9=259",
+      "实际占比": "YZY=53%；WC=11%；RQ=29%；JJ=7%；SH9.9=100%"
     }
   }
 ]

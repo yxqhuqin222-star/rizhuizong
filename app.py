@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 from datetime import datetime, timedelta
 from email import policy
 from email.parser import BytesParser
@@ -43,7 +44,7 @@ REPORT_LABELS = {
     "primary": "小学",
     "middle": "初中",
     "high": "高中",
-    "lec1": "lec1元占比",
+    "lec1": "lec内测小学量级",
 }
 STATIC_REPORT_URLS = {
     "primary": "/reports/primary_daily_progress.png",
@@ -59,6 +60,26 @@ _query_demo_cache = None
 _query_target_cache = None
 _query_knowledge_cache = None
 _upload_metadata_lock = threading.Lock()
+
+
+def online_endpoint_label(url):
+    parsed = urlparse(url)
+    return f"{parsed.netloc}{parsed.path}" if parsed.netloc else url
+
+
+def open_online_request(request, timeout, label, attempts=3, delay=1):
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return urlopen(request, timeout=timeout)
+        except HTTPError:
+            raise
+        except URLError as exc:
+            last_error = exc
+            if attempt == attempts:
+                break
+            time.sleep(delay)
+    raise RuntimeError(f"{label}连接失败：{last_error}") from last_error
 
 
 def load_local_env():
@@ -175,7 +196,8 @@ def upload_report_image(dept, image_path):
         },
         method="POST",
     )
-    with urlopen(request, timeout=30) as response:
+    label = f"播报图同步（{online_endpoint_label(REPORT_IMAGE_UPLOAD_URL)}）"
+    with open_online_request(request, timeout=30, label=label) as response:
         result = json.loads(response.read().decode("utf-8"))
     image_url = result.get("url")
     if not image_url:
@@ -184,6 +206,7 @@ def upload_report_image(dept, image_path):
 
 
 def post_online_bytes(url, data, content_type):
+    label = f"线上同步（{online_endpoint_label(url)}）"
     request = Request(
         url,
         data=data,
@@ -194,11 +217,11 @@ def post_online_bytes(url, data, content_type):
         method="POST",
     )
     try:
-        with urlopen(request, timeout=30) as response:
+        with open_online_request(request, timeout=30, label=label) as response:
             text = response.read().decode("utf-8")
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"线上同步失败（HTTP {exc.code}）：{detail}") from exc
+        raise RuntimeError(f"{label}失败（HTTP {exc.code}）：{detail}") from exc
     try:
         return json.loads(text) if text else {}
     except json.JSONDecodeError:

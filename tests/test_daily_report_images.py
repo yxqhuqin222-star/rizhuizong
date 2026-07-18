@@ -7,6 +7,7 @@ from reports.build_daily_report_images import (
     LEC1_TERM,
     channel_label,
     filter_lec1_data,
+    lec1_actual_shares,
     lec1_channel_counts,
     progress_gap,
     remaining_days,
@@ -48,30 +49,25 @@ class ChannelLabelTest(unittest.TestCase):
 
 
 class Lec1ChannelsTest(unittest.TestCase):
-    def test_channel_order_codes_and_target_shares_match_confirmed_plan(self):
+    def test_channel_order_codes_and_target_volumes_match_confirmed_plan(self):
         self.assertEqual(
             LEC1_CHANNELS,
             [
-                ("YZY", "out_wxst_wxstqt_1774944753086", 0.25),
-                ("WC", "out_wxst_wxstqt_1774944782661", 0.15),
-                ("RQ", "out_wxst_wxstqt_1774945025540", 0.20),
-                ("JJ", "out_wxst_wxstqt_1774945094967", 0.08),
-                ("SH", "out_wxst_wxstqt_1774944710158", 0.12),
-                ("ZXC", "out_wxst_wxstqt_1781763514315", 0.05),
-                ("微转", "out_wxst_wxstqt_1774945129110", 0.12),
-                ("HFS", "out_wxst_wxstqt_1781763558917", 0.03),
-                ("YD", "out_wxst_wxstqt_1766038527925", 0.00),
-                ("爆量本地化", "out_wxst_wxstqt_1766038666197", 0.00),
+                ("YZY", "out_wxst_wxstqt_1774944753086", 2900, 0.49),
+                ("WC", "out_wxst_wxstqt_1774944782661", 1000, 0.17),
+                ("RQ", "out_wxst_wxstqt_1774945025540", 1000, 0.17),
+                ("JJ", "out_wxst_wxstqt_1774945094967", 1000, 0.17),
+                ("SH9.9", "out_wxst_wxstqt_1774944710158", 600, 1.0),
             ],
         )
-        self.assertAlmostEqual(sum(channel[2] for channel in LEC1_CHANNELS), 1.0)
+        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 6500)
 
     def test_scope_matches_progress_summary_without_payment_or_intake_cutoff(self):
         demo = pd.DataFrame(
             [
                 {
                     "学部": "小学",
-                    "期次": "暑_10",
+                    "期次": "暑_11",
                     "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
@@ -93,7 +89,7 @@ class Lec1ChannelsTest(unittest.TestCase):
                 },
                 {
                     "学部": "小学",
-                    "期次": "暑_10",
+                    "期次": "暑_11",
                     "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
@@ -102,13 +98,24 @@ class Lec1ChannelsTest(unittest.TestCase):
                     "custom_uid": "u3",
                     "last_from": "out_wxst_wxstqt_1774944753086",
                 },
+                {
+                    "学部": "小学",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "下单日期": "2026-07-08",
+                    "支付时间": "2026-07-08 10:00:00",
+                    "custom_uid": "u4",
+                    "last_from": "out_wxst_wxstqt_1774944753086",
+                },
             ]
         )
         target = pd.DataFrame(
             [
                 {
                     "学部": "小学",
-                    "期次": "暑_10",
+                    "期次": "暑_11",
                     "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
@@ -121,31 +128,31 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         result = filter_lec1_data(demo, target)
 
-        self.assertEqual(LEC1_TERM, "暑_10")
-        self.assertEqual(result["custom_uid"].tolist(), ["u1", "u3"])
+        self.assertEqual(LEC1_TERM, "暑_11")
+        self.assertEqual(result["custom_uid"].tolist(), ["u1", "u3", "u4"])
 
-    def test_unmatched_external_transfer_is_counted_in_mapped_last_from_after_assignment(self):
+    def test_intake_uses_order_volume_with_custom_uid_deduplication(self):
         demo = pd.DataFrame(
             [
                 {
                     "学部": "小学",
-                    "期次": "暑_10",
-                    "线索渠道二级分类": "外部微转-测试",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
                     "下单日期": "2026-07-09",
                     "custom_uid": "u1",
-                    "last_from": "out_wxst_wxstqt_1774945129110",
+                    "last_from": "out_wxst_wxstqt_1774944753086",
                 },
                 {
                     "学部": "小学",
-                    "期次": "暑_10",
-                    "线索渠道二级分类": "外部微转-测试",
+                    "期次": "暑_11",
+                    "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
                     "下单日期": "2026-07-09",
                     "custom_uid": "u1",
-                    "last_from": "out_wxst_wxstqt_1774945129110",
+                    "last_from": "out_wxst_wxstqt_1774944753086",
                 },
             ]
         )
@@ -153,7 +160,7 @@ class Lec1ChannelsTest(unittest.TestCase):
             [
                 {
                     "学部": "小学",
-                    "期次": "暑_10",
+                    "期次": "暑_11",
                     "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
@@ -166,10 +173,24 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         result = filter_lec1_data(demo, target)
         counts = lec1_channel_counts(result)
-        micro_transfer_index = [name for name, _code, _share in LEC1_CHANNELS].index("微转")
+        yzy_index = [name for name, _code, _target, _share in LEC1_CHANNELS].index("YZY")
 
         self.assertEqual(len(result), 2)
-        self.assertEqual(counts[micro_transfer_index], 1)
+        self.assertEqual(counts[yzy_index], 1)
+
+    def test_actual_share_uses_one_yuan_denominator_and_sh_9_9_own_denominator(self):
+        data = pd.DataFrame(
+            [
+                {"价体": 100, "custom_uid": "y1", "last_from": "out_wxst_wxstqt_1774944753086"},
+                {"价体": 100, "custom_uid": "y2", "last_from": "out_wxst_wxstqt_1774944753086"},
+                {"价体": 100, "custom_uid": "r1", "last_from": "out_wxst_wxstqt_1774945025540"},
+                {"价体": 990, "custom_uid": "s1", "last_from": "out_wxst_wxstqt_1774944710158"},
+            ]
+        )
+
+        shares = lec1_actual_shares(data)
+
+        self.assertEqual(shares, [2 / 3, 0, 1 / 3, 0, 1])
 
 
 class StatusTextTest(unittest.TestCase):
