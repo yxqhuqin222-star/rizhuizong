@@ -8,6 +8,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 output/
+state/
 outputs/demo_read_error_rows_*/
 
 # Local Netlify folder

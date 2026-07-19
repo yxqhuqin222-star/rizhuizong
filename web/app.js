@@ -44,6 +44,15 @@ function uploadStatus(kind, type, message) {
   el.className = `upload-status show ${type}`;
 }
 
+function syncStatusText(sync) {
+  if (sync?.ok) return `线上已同步：${sync.syncedAt || "已完成"}`;
+  if (sync?.queued) {
+    const attempts = sync.queue?.attempts ? `，已重试 ${sync.queue.attempts} 次` : "";
+    return `线上待自动补偿同步：${sync.message || "已加入本地同步队列"}${attempts}`;
+  }
+  return `线上未同步：${sync?.message || "未返回同步结果"}`;
+}
+
 function openReport(dept) {
   if (readOnlyMode) {
     const reportFiles = {
@@ -309,12 +318,10 @@ async function reloadFixedFile(kind) {
     render();
     const fileInfo = data.state.files[kind];
     const uploadedAt = fileInfo?.uploaded_at ? `上传时间：${fileInfo.uploaded_at}` : "已完成重算";
-    const syncText = data.sync?.ok
-      ? `线上已同步：${data.sync.syncedAt || "已完成"}`
-      : `线上未同步：${data.sync?.message || "未返回同步结果"}`;
-    const statusType = data.sync?.ok ? "success" : "error";
+    const syncText = syncStatusText(data.sync);
+    const statusType = data.sync?.ok ? "success" : "pending";
     uploadStatus(kind, statusType, `${label} 读取成功，summary 已更新。${uploadedAt}。${syncText}`);
-    toast(data.sync?.ok ? `${label} 已更新并同步线上` : `${label} 本地已更新，线上同步失败`);
+    toast(data.sync?.ok ? `${label} 已更新并同步线上` : `${label} 本地已更新，线上会自动重试`);
   } catch (error) {
     uploadStatus(kind, "error", `${label} 读取失败：${error.message}`);
     toast(error.message);

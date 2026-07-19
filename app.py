@@ -30,6 +30,8 @@ WORKBOOK_SCRIPT = OUTPUT_DIR / "build_workbook.mjs"
 NODE_BIN = Path("/Users/kityhello/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node")
 LAST_QUERY_PATH = OUTPUT_DIR / "query_result.csv"
 UPLOAD_METADATA_PATH = OUTPUT_DIR / "upload_metadata.json"
+STATE_DIR = ROOT / "state"
+SYNC_QUEUE_PATH = STATE_DIR / "sync_queue.json"
 CHANNEL_ALIAS_PATH = ROOT / "config" / "channel_aliases.csv"
 REPORT_SCRIPT = ROOT / "reports" / "build_daily_report_images.py"
 REPORT_EXPORT_SCRIPT = ROOT / "reports" / "export_daily_report_images.mjs"
@@ -55,11 +57,12 @@ STATIC_REPORT_URLS = {
 DINGTALK_KEYWORD = "成单"
 SERVER_DISABLED_PATH = ROOT / ".dashboard-server-disabled"
 SERVER_STARTED_AT = datetime.now().astimezone().isoformat(timespec="seconds")
-SERVER_CAPABILITIES = ["health", "reload-demo", "reload-target", "online-sync"]
+SERVER_CAPABILITIES = ["health", "reload-demo", "reload-target", "online-sync", "retry-sync"]
 _query_demo_cache = None
 _query_target_cache = None
 _query_knowledge_cache = None
 _upload_metadata_lock = threading.Lock()
+_sync_queue_lock = threading.Lock()
 
 
 def online_endpoint_label(url):
@@ -67,7 +70,7 @@ def online_endpoint_label(url):
     return f"{parsed.netloc}{parsed.path}" if parsed.netloc else url
 
 
-def open_online_request(request, timeout, label, attempts=3, delay=1):
+def open_online_request(request, timeout, label, attempts=5, delay=2):
     last_error = None
     for attempt in range(1, attempts + 1):
         try:
@@ -96,7 +99,8 @@ def load_local_env():
 
 load_local_env()
 DINGTALK_WEBHOOK = os.environ.get("DINGTALK_WEBHOOK", "")
-REPORT_IMAGE_UPLOAD_URL = os.environ.get("REPORT_IMAGE_UPLOAD_URL", "")
+DEFAULT_REPORT_IMAGE_UPLOAD_URL = "https://kityhello.dpdns.org/.netlify/functions/report-image"
+REPORT_IMAGE_UPLOAD_URL = os.environ.get("REPORT_IMAGE_UPLOAD_URL", DEFAULT_REPORT_IMAGE_UPLOAD_URL)
 REPORT_UPLOAD_TOKEN = os.environ.get("REPORT_UPLOAD_TOKEN", "")
 DASHBOARD_SYNC_TOKEN = os.environ.get("DASHBOARD_SYNC_TOKEN", REPORT_UPLOAD_TOKEN)
 DASHBOARD_STATE_UPLOAD_URL = os.environ.get(
@@ -228,34 +232,149 @@ def post_online_bytes(url, data, content_type):
         return {"raw": text}
 
 
-def sync_online_state(state):
-    if not DASHBOARD_SYNC_TOKEN:
-        return {"ok": False, "skipped": True, "message": "缺少 DASHBOARD_SYNC_TOKEN 或 REPORT_UPLOAD_TOKEN。"}
-    if not DASHBOARD_STATE_UPLOAD_URL or not DASHBOARD_WORKBOOK_UPLOAD_URL:
-        return {"ok": False, "skipped": True, "message": "缺少线上同步地址。"}
-
+def load_sync_queue():
+    if not SYNC_QUEUE_PATH.exists():
+        return {"pending": False}
     try:
-        report_urls = {}
-        for dept, image_path in REPORT_FILES.items():
-            report_urls[dept] = upload_report_image(dept, image_path)
+        return json.loads(SYNC_QUEUE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {
+            "pending": True,
+            "status": "pending",
+            "lastError": "同步队列文件损坏，已按待同步处理。",
+            "attempts": 0,
+        }
 
-        online_state = dict(state)
-        online_state["reportUrls"] = report_urls
-        online_state["syncedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
 
-        post_online_bytes(
-            DASHBOARD_WORKBOOK_UPLOAD_URL,
-            (OUTPUT_DIR / "tongji_summary_current.xlsx").read_bytes(),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+def write_sync_queue(queue):
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    temporary_path = SYNC_QUEUE_PATH.with_suffix(".tmp")
+    temporary_path.write_text(
+        json.dumps(queue, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    temporary_path.replace(SYNC_QUEUE_PATH)
+
+
+def clear_sync_queue(synced_at):
+    with _sync_queue_lock:
+        write_sync_queue(
+            {
+                "pending": False,
+                "status": "synced",
+                "syncedAt": synced_at,
+                "updatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+            }
         )
-        result = post_online_bytes(
-            DASHBOARD_STATE_UPLOAD_URL,
-            json.dumps(online_state, ensure_ascii=False, allow_nan=False).encode("utf-8"),
-            "application/json; charset=utf-8",
+
+
+def mark_sync_pending(reason):
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    with _sync_queue_lock:
+        existing = load_sync_queue()
+        write_sync_queue(
+            {
+                "pending": True,
+                "status": "pending",
+                "reason": reason,
+                "queuedAt": existing.get("queuedAt") or now,
+                "updatedAt": now,
+                "attempts": int(existing.get("attempts") or 0),
+                "lastError": existing.get("lastError"),
+            }
         )
-        return {"ok": True, "state": result, "syncedAt": online_state["syncedAt"]}
+
+
+def record_sync_failure(message):
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    with _sync_queue_lock:
+        existing = load_sync_queue()
+        write_sync_queue(
+            {
+                "pending": True,
+                "status": "failed",
+                "reason": existing.get("reason") or "online-sync",
+                "queuedAt": existing.get("queuedAt") or now,
+                "updatedAt": now,
+                "attempts": int(existing.get("attempts") or 0) + 1,
+                "lastError": message,
+            }
+        )
+
+
+def sync_queue_status():
+    queue = load_sync_queue()
+    return {
+        "pending": bool(queue.get("pending")),
+        "status": queue.get("status") or ("pending" if queue.get("pending") else "idle"),
+        "queuedAt": queue.get("queuedAt"),
+        "updatedAt": queue.get("updatedAt"),
+        "syncedAt": queue.get("syncedAt"),
+        "attempts": int(queue.get("attempts") or 0),
+        "lastError": queue.get("lastError"),
+    }
+
+
+def perform_online_sync(state):
+    if not DASHBOARD_SYNC_TOKEN:
+        raise ValueError("缺少 DASHBOARD_SYNC_TOKEN 或 REPORT_UPLOAD_TOKEN。")
+    if not DASHBOARD_STATE_UPLOAD_URL or not DASHBOARD_WORKBOOK_UPLOAD_URL:
+        raise ValueError("缺少线上同步地址。")
+
+    report_urls = {}
+    for dept, image_path in REPORT_FILES.items():
+        report_urls[dept] = upload_report_image(dept, image_path)
+
+    online_state = dict(state)
+    online_state["reportUrls"] = report_urls
+    online_state["syncedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    post_online_bytes(
+        DASHBOARD_WORKBOOK_UPLOAD_URL,
+        (OUTPUT_DIR / "tongji_summary_current.xlsx").read_bytes(),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    result = post_online_bytes(
+        DASHBOARD_STATE_UPLOAD_URL,
+        json.dumps(online_state, ensure_ascii=False, allow_nan=False).encode("utf-8"),
+        "application/json; charset=utf-8",
+    )
+    return {"ok": True, "state": result, "syncedAt": online_state["syncedAt"]}
+
+
+def sync_online_state(state, reason="online-sync"):
+    mark_sync_pending(reason)
+    try:
+        result = perform_online_sync(state)
+        clear_sync_queue(result["syncedAt"])
+        result["queue"] = sync_queue_status()
+        return result
     except (OSError, URLError, RuntimeError, ValueError) as exc:
-        return {"ok": False, "message": str(exc)}
+        record_sync_failure(str(exc))
+        queue = sync_queue_status()
+        return {
+            "ok": False,
+            "queued": True,
+            "message": f"已保存到本地同步队列，稍后自动重试：{exc}",
+            "queue": queue,
+        }
+
+
+def retry_pending_sync_once():
+    queue = load_sync_queue()
+    if not queue.get("pending"):
+        return {"ok": True, "skipped": True, "message": "没有待补偿同步。", "queue": sync_queue_status()}
+    return sync_online_state(state_payload(), reason=queue.get("reason") or "retry")
+
+
+def retry_pending_sync_async():
+    if not load_sync_queue().get("pending"):
+        return
+
+    def worker():
+        retry_pending_sync_once()
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def format_report_summary_value(key, value):
@@ -357,6 +476,7 @@ def state_payload():
             "target": file_info(TARGET_PATH, "target"),
         },
         "reportUrls": STATIC_REPORT_URLS,
+        "sync": sync_queue_status(),
     }
 
 
@@ -961,6 +1081,7 @@ class Handler(BaseHTTPRequestHandler):
                         "pid": os.getpid(),
                         "started_at": SERVER_STARTED_AT,
                         "capabilities": SERVER_CAPABILITIES,
+                        "sync": sync_queue_status(),
                     }
                 )
             elif path == "/favicon.ico":
@@ -1024,8 +1145,11 @@ class Handler(BaseHTTPRequestHandler):
                 rebuild_outputs()
                 record_upload_time([kind])
                 state = state_payload()
-                sync = sync_online_state(state)
+                sync = sync_online_state(state, reason=f"reload-{kind}")
                 self.send_json({"ok": True, "changed": [kind], "state": state, "sync": sync})
+            elif parsed.path == "/api/retry-sync":
+                sync = retry_pending_sync_once()
+                self.send_json({"ok": True, "state": state_payload(), "sync": sync})
             elif parsed.path == "/api/query":
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -1077,6 +1201,7 @@ def main():
         return
 
     ensure_payload()
+    retry_pending_sync_async()
     server = ThreadingHTTPServer(("0.0.0.0", 8766), Handler)
     print("Progress dashboard: http://0.0.0.0:8766")
     server.serve_forever()

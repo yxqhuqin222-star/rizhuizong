@@ -11,13 +11,16 @@ old_pid="$(launchctl print "$service" 2>/dev/null | awk '$1 == "pid" {print $3; 
 launchctl kickstart -k "$service"
 
 for attempt in {1..20}; do
-  if /usr/bin/curl --silent --show-error --max-time 2 "$health_url" >"$response_file" 2>/dev/null; then
+  if /usr/bin/curl --silent --show-error --max-time 2 "$health_url" >"$response_file" 2>/dev/null && [[ -s "$response_file" ]]; then
     if "$python_bin" - "$response_file" "$old_pid" <<'PY'
 import json
 import sys
 
-with open(sys.argv[1], encoding="utf-8") as response:
-    payload = json.load(response)
+try:
+    with open(sys.argv[1], encoding="utf-8") as response:
+        payload = json.load(response)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
 
 old_pid = sys.argv[2]
 required = {"health", "reload-demo", "reload-target"}
