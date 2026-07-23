@@ -1,6 +1,7 @@
 const state = {
   allRows: [],
   latestRows: [],
+  detailLatestRows: [],
   scope: "latest",
   chip: "all",
   currentRows: [],
@@ -104,6 +105,7 @@ async function loadState() {
     const data = await requestJson("/api/state");
     state.allRows = data.summary;
     state.latestRows = data.latestSummary;
+    state.detailLatestRows = data.detailLatestSummary || data.latestSummary;
     state.reportUrls = data.reportUrls || {};
     renderFileInfo(data.files);
     renderMetrics(data.metrics.latest);
@@ -223,7 +225,7 @@ function rowStatus(row) {
 }
 
 function activeRows() {
-  return state.scope === "latest" ? state.latestRows : state.allRows;
+  return state.scope === "latest" ? state.detailLatestRows : state.allRows;
 }
 
 function filteredRows() {
@@ -311,6 +313,7 @@ async function reloadFixedFile(kind) {
     const data = await requestJson(`/api/reload-${kind}`, { method: "POST" }, true);
     state.allRows = data.state.summary;
     state.latestRows = data.state.latestSummary;
+    state.detailLatestRows = data.state.detailLatestSummary || data.state.latestSummary;
     state.reportUrls = data.state.reportUrls || {};
     renderFileInfo(data.state.files);
     renderMetrics(data.state.metrics.latest);
