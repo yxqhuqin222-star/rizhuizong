@@ -55,6 +55,9 @@ def build():
     state = {
         "summary": rows_from_payload(payload["summary"]),
         "latestSummary": rows_from_payload(payload["latest_summary"]),
+        "detailLatestSummary": rows_from_payload(
+            payload.get("detail_latest_summary", payload["latest_summary"])
+        ),
         "metrics": payload["metrics"],
         "files": {
             "demo": {

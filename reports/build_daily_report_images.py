@@ -15,6 +15,12 @@ TARGET_PATH = ROOT / "tongji_target.xlsx"
 OUT_DIR = ROOT / "reports" / "daily_progress"
 TOTAL_DAYS = 6
 DEPARTMENTS = ["小学", "初中", "高中"]
+TERM_SEASON_ORDER = {
+    "春": 1,
+    "暑": 2,
+    "秋": 3,
+    "寒": 4,
+}
 GRADE_ORDER = {
     "二年级": 1,
     "三年级": 2,
@@ -40,8 +46,15 @@ LEC1_PAYMENT_LABEL = "1元+9.9元"
 
 
 def term_key(value):
-    match = re.search(r"(\d+)", str(value))
-    return int(match.group(1)) if match else -1
+    text = str(value)
+    season_rank = 0
+    for season, rank in TERM_SEASON_ORDER.items():
+        if season in text:
+            season_rank = rank
+            break
+    match = re.search(r"(\d+)", text)
+    number_rank = int(match.group(1)) if match else -1
+    return season_rank, number_rank
 
 
 def pct(value):

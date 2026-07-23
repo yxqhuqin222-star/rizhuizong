@@ -130,9 +130,11 @@ Rules:
 #### Default latest-term view
 
 - For each `学部`, identify the latest `期次` from the `target` table.
+- Latest `期次` order is `春 < 暑 < 秋 < 寒`; within the same season, compare the numeric suffix.
 - If a `demo` row belongs to a newer term that does not exist in the `target` table, keep it in full Summary but exclude it from the default latest-term view.
 - Default table and KPI cards use only those rows.
 - The overview shows separate primary, middle, and high school rows; it does not show aggregate or self-study rows.
+- The latest-term detail table additionally shows `自拼` rows from the newest `demo` term as current-only rows when `自拼` has no target rows. These rows are for inspecting current intake only and are excluded from KPI cards, latest-term exports, and broadcast images.
 - The detail view defaults to the `快` quick filter.
 - Clicking a department's lagging-item count opens the latest-term detail filtered to that department and rows whose completion rate is below progress.
 - The user can select all terms or a specific term through filters.
@@ -169,7 +171,7 @@ User actions:
 
 Daily progress broadcast field mapping:
 
-- Scope: only each department's latest `期次` from the `target` table; historical terms and demo-only newer terms are not shown in broadcast images.
+- Scope: only each department's latest `期次` from the `target` table; latest `期次` uses `春 < 暑 < 秋 < 寒` and then numeric suffix order; historical terms and demo-only newer terms are not shown in broadcast images.
 - `渠道展示 = 线索渠道二级分类 + 格式化后的价体`
 - `招生目标 = 目标`
 - `进度GAP = 时间进度 - 招生进度`，两个进度均按页面展示口径限制在 `0%–100%`，并保留正负号。
@@ -230,7 +232,7 @@ No database, login, external API, or cloud service is required for V1.
 - The user runs this locally.
 - Excel field names stay aligned with the confirmed Chinese names.
 - `target_time` remains the target-date field name.
-- Latest term is determined from the `target` table by the numeric suffix in `期次`, such as `暑_10 > 暑_9`.
+- Latest term is determined from the `target` table by season order `春 < 暑 < 秋 < 寒`; terms in the same season use numeric suffix order, such as `暑_10 > 暑_9`.
 - Natural-language query remains rule-based and does not use an external model.
 - Missing conditions are never inferred from defaults; the user must confirm them.
 

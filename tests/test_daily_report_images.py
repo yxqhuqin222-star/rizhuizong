@@ -9,10 +9,12 @@ from reports.build_daily_report_images import (
     filter_lec1_data,
     lec1_actual_shares,
     lec1_channel_counts,
+    latest_target_term,
     progress_gap,
     remaining_days,
     render_rows,
     status_text,
+    term_key,
 )
 
 
@@ -46,6 +48,21 @@ class ChannelLabelTest(unittest.TestCase):
         row = pd.Series({"线索渠道二级分类": "LLM外呼", "价体": 9.9})
 
         self.assertEqual(channel_label(row), "LLM外呼-9.9元")
+
+
+class LatestTermTest(unittest.TestCase):
+    def test_latest_target_term_uses_confirmed_season_order(self):
+        frame = pd.DataFrame(
+            [
+                {"期次": "暑_13", "target_time": "2026-07-21"},
+                {"期次": "秋_1", "target_time": "2026-07-28"},
+                {"期次": "春_99", "target_time": "2026-03-01"},
+            ]
+        )
+
+        self.assertEqual(latest_target_term(frame), "秋_1")
+        self.assertGreater(term_key("秋_1"), term_key("暑_13"))
+        self.assertGreater(term_key("寒_1"), term_key("秋_99"))
 
 
 class Lec1ChannelsTest(unittest.TestCase):

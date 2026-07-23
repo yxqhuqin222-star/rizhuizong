@@ -66,6 +66,13 @@ GRADE_ORDER = {
 }
 TOTAL_DAYS = 6
 REST_WEEKDAY = 0
+TERM_SEASON_ORDER = {
+    "春": 1,
+    "暑": 2,
+    "秋": 3,
+    "寒": 4,
+}
+DETAIL_CURRENT_ONLY_DEPARTMENTS = {"自拼"}
 
 
 def validate_columns(df, required_columns, label):
@@ -246,11 +253,19 @@ def build_summary(demo, target):
     return summary, current_summary, target_summary
 
 
-def latest_term_rows(summary, target_summary):
-    def term_key(value):
-        digits = "".join(ch for ch in str(value) if ch.isdigit())
-        return int(digits) if digits else -1
+def term_key(value):
+    text = str(value)
+    season_rank = 0
+    for season, rank in TERM_SEASON_ORDER.items():
+        if season in text:
+            season_rank = rank
+            break
+    digits = "".join(ch for ch in text if ch.isdigit())
+    number_rank = int(digits) if digits else -1
+    return season_rank, number_rank
 
+
+def latest_term_rows(summary, target_summary):
     target_terms = target_summary[["学部", "期次"]].drop_duplicates().copy()
     target_terms["term_rank"] = target_terms["期次"].map(term_key)
     latest_terms = target_terms.loc[
@@ -258,6 +273,31 @@ def latest_term_rows(summary, target_summary):
         ["学部", "期次"],
     ].drop_duplicates()
     return summary.merge(latest_terms, on=["学部", "期次"], how="inner")
+
+
+def detail_latest_term_rows(summary, target_summary):
+    latest_rows = latest_term_rows(summary, target_summary)
+    current_only = summary[summary["学部"].isin(DETAIL_CURRENT_ONLY_DEPARTMENTS)].copy()
+    if current_only.empty:
+        return latest_rows
+
+    current_only_terms = current_only[["学部", "期次"]].drop_duplicates().copy()
+    current_only_terms["term_rank"] = current_only_terms["期次"].map(term_key)
+    latest_current_only_terms = current_only_terms.loc[
+        current_only_terms["term_rank"].eq(
+            current_only_terms.groupby("学部")["term_rank"].transform("max")
+        ),
+        ["学部", "期次"],
+    ].drop_duplicates()
+    current_only_latest_rows = summary.merge(
+        latest_current_only_terms,
+        on=["学部", "期次"],
+        how="inner",
+    )
+    return pd.concat([latest_rows, current_only_latest_rows], ignore_index=True).drop_duplicates(
+        subset=DIMENSIONS,
+        keep="first",
+    )
 
 
 def frame_to_payload(df):
@@ -288,8 +328,10 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     latest_summary = latest_term_rows(summary, target_summary)
+    detail_latest_summary = detail_latest_term_rows(summary, target_summary)
     output_summary = format_payment_for_output(summary)
     output_latest_summary = format_payment_for_output(latest_summary)
+    output_detail_latest_summary = format_payment_for_output(detail_latest_summary)
     output_summary.to_csv(out_dir / "tongji_summary_current.csv", index=False, encoding="utf-8-sig")
     latest_terms = (
         latest_summary[["学部", "期次"]]
@@ -319,7 +361,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["目标合计", int(summary["目标"].sum())],
             ["现状合计", int(summary["现状"].sum())],
             ["完成率整体", summary["现状"].sum() / summary["目标"].sum() if summary["目标"].sum() else pd.NA],
-            ["默认展示口径", "以 target 表中的期次为准，每个学部仅展示目标表里的最新期次；demo-only 期次保留在完整 Summary 中"],
+            ["默认展示口径", "以 target 表中的期次为准，每个学部仅展示目标表里的最新期次；期次按春 < 暑 < 秋 < 寒、同季节按数字排序；demo-only 期次保留在完整 Summary 中"],
             ["最新期次范围", latest_terms_text],
             ["最新期次聚合组合数", len(latest_summary)],
             ["最新期次目标合计", int(latest_summary["目标"].sum())],
@@ -335,7 +377,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["进量日期口径", "每个统计项下取 target 表中的进量日期"],
             ["进度计算", "当前日期统一取同学部、同一期次 demo 的最近下单日期；早于进量日期时进度=0；进量日期至目标日前按业务进度日/6计算，周一休息不计入业务进度日，目标日前最高5/6；目标日及以后进度=100%"],
             ["日期一致性", "同学部、同一期次的 target_time 和进量日期必须分别唯一，否则停止生成"],
-            ["播报图期次口径", "以 target 表中的期次为准，小学、初中、高中各自仅播报目标表里的最新一期次数据"],
+            ["播报图期次口径", "以 target 表中的期次为准，小学、初中、高中各自仅播报目标表里的最新一期次数据；期次按春 < 暑 < 秋 < 寒、同季节按数字排序"],
             ["价体展示", "原始价体除以 100，去除无意义的小数位，例如 100→1、990→9.9、1880→18.8"],
             ["播报图渠道展示", "线索渠道二级分类 + 格式化后的价体"],
             ["播报图招生目标", "目标"],
@@ -354,6 +396,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
     payload = {
         "summary": frame_to_payload(output_summary),
         "latest_summary": frame_to_payload(output_latest_summary),
+        "detail_latest_summary": frame_to_payload(output_detail_latest_summary),
         "metrics": {
             "all": metrics_for(summary),
             "latest": metrics_for(latest_summary),

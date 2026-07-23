@@ -22,6 +22,41 @@ class SummaryProgressTest(unittest.TestCase):
 
         self.assertEqual(build_summary.metrics_for(frame)["behind_count"], 1)
 
+    def test_latest_term_uses_confirmed_season_order_before_number(self):
+        summary = pd.DataFrame(
+            [
+                {"学部": "初中", "期次": "暑_13", "目标": 130, "现状": 130, "完成率": 1, "进度": 1},
+                {"学部": "初中", "期次": "秋_1", "目标": 100, "现状": 20, "完成率": 0.2, "进度": 1 / 6},
+                {"学部": "高中", "期次": "秋_2", "目标": 200, "现状": 80, "完成率": 0.4, "进度": 1 / 6},
+                {"学部": "高中", "期次": "寒_1", "目标": 300, "现状": 60, "完成率": 0.2, "进度": 1 / 6},
+            ]
+        )
+        target_summary = summary[["学部", "期次"]].copy()
+
+        result = build_summary.latest_term_rows(summary, target_summary)
+
+        self.assertEqual(set(result["期次"]), {"秋_1", "寒_1"})
+        self.assertEqual(build_summary.term_key("春_99"), (1, 99))
+        self.assertGreater(build_summary.term_key("秋_1"), build_summary.term_key("暑_13"))
+        self.assertGreater(build_summary.term_key("寒_1"), build_summary.term_key("秋_2"))
+
+    def test_detail_latest_includes_current_only_self_study_without_changing_latest(self):
+        summary = pd.DataFrame(
+            [
+                {"学部": "小学", "期次": "暑_11", "线索渠道二级分类": "LEC内测", "价体": 990, "年级": "三年级", "目标": 100, "现状": 90, "完成率": 0.9, "进度": 1},
+                {"学部": "自拼", "期次": "暑_11", "线索渠道二级分类": "WB", "价体": 990, "年级": "一年级", "目标": 0, "现状": 40, "完成率": pd.NA, "进度": pd.NA},
+                {"学部": "自拼", "期次": "暑_12", "线索渠道二级分类": "WB", "价体": 990, "年级": "一年级", "目标": 0, "现状": 50, "完成率": pd.NA, "进度": pd.NA},
+            ]
+        )
+        target_summary = summary.loc[summary["学部"].eq("小学"), ["学部", "期次"]].copy()
+
+        latest = build_summary.latest_term_rows(summary, target_summary)
+        detail_latest = build_summary.detail_latest_term_rows(summary, target_summary)
+
+        self.assertNotIn("自拼", set(latest["学部"]))
+        self.assertIn(("自拼", "暑_12"), set(zip(detail_latest["学部"], detail_latest["期次"])))
+        self.assertNotIn(("自拼", "暑_11"), set(zip(detail_latest["学部"], detail_latest["期次"])))
+
     def test_counts_distinct_custom_uid_within_each_summary_dimension(self):
         demo = pd.DataFrame(
             [
