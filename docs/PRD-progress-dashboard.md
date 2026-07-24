@@ -138,12 +138,16 @@ Rules:
 - The detail view defaults to the `快` quick filter.
 - Clicking a department's lagging-item count opens the latest-term detail filtered to that department and rows whose completion rate is below progress.
 - The user can select all terms or a specific term through filters.
+- The detail view shows a current-filter summary above the table and below the filters. It updates with department, term, channel, payment, order-date, keyword, and quick-filter changes. The summary shows row count, target total, current total, difference total, completion, progress, and behind count.
+- Current-filter summary completion is calculated as `现状合计 / 目标合计`; it must not average row-level completion rates. Target, current, and difference use totals from the filtered detail rows.
+- Current-filter summary progress displays the single unique filtered progress value when one exists. If filtered rows contain multiple progress values, the progress field displays `多值` instead of mixing different business schedules into one number.
 
 #### Export
 
 - Export latest-term summary.
 - Export full summary.
 - Export query results.
+- Export current detail view with the same current-filter summary shown above the rows.
 - Export daily progress broadcast images for `小学`, `初中`, and `高中`.
 - Broadcast daily progress images for `小学`, `初中`, and `高中` to the DingTalk group robot.
 - Image downloads open in a new browser tab and leave the dashboard open.
@@ -178,7 +182,7 @@ Daily progress broadcast field mapping:
 - 每期按 6 个业务日折算，每周一为业务休息日；目标日及以后 `剩余天数 = 0`，目标日前 `剩余天数 = max(6 - 当前进度阶段, 1)`，其中 `当前进度阶段 = 进度 × 6`。剩余天数与进度使用同一计算结果，不再按自然日期相减。
 - `状态` uses the same classification as the dashboard.
 - Grade rows use business order: 小学二至六年级、初中初一至初三、高中高一至高三。
-- `lec内测小学量级` 固定统计小学 `暑_11`、`LEC内测`、1 元和 9.9 元数据，渠道归属和去重口径与进度表 `现状` 一致：按学部期次全量统计，不按进量日期过滤；未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与报量为：YZY 2900、WC 1000、RQ 1000、JJ 1000、SH9.9 600；`进量` 直接取对应渠道的 1 元和 9.9 元成单量合计，渠道按完整 `last_from` 精确匹配。`目标占比` 固定为 YZY 49%、WC 17%、RQ 17%、JJ 17%、SH9.9 100%；`实际占比` 中 YZY/WC/RQ/JJ 仅按 1 元价体计算且分母不含 SH9.9，SH9.9 按 9.9 元单独展示为 100%。
+- `lec内测小学量级` 固定统计小学 `LEC内测`、1 元数据，期次取 target 表中该范围的最新期次，渠道归属和去重口径与进度表 `现状` 一致：按学部期次全量统计，不按进量日期过滤；未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与报量为：YZY 4400、WC 1800、RQ 1000、JJ 1000；`进量` 直接取对应渠道的 1 元成单量，渠道按完整 `last_from` 精确匹配。`目标占比` 固定为 YZY 54%、WC 22%、RQ 12%、JJ 12%；`实际占比` 按 1 元价体计算。
 
 DingTalk broadcast note:
 

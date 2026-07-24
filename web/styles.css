@@ -664,6 +664,37 @@ main.query-mode > #summary {
   cursor: not-allowed;
 }
 
+.filtered-summary {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(94px, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.filtered-summary-item {
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid #e5ebf2;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: #fbfcfe;
+}
+
+.filtered-summary-item span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.filtered-summary-item strong {
+  color: #1d2b3a;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
 .chips {
   display: flex;
   gap: 8px;
@@ -795,6 +826,7 @@ td.num, th.num { text-align: right; }
   .app { grid-template-columns: 1fr; }
   aside { position: static; height: auto; }
   .filters { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  .filtered-summary { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
 }
 
 @media (max-width: 680px) {
