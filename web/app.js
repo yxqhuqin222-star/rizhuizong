@@ -149,6 +149,48 @@ function metricsForRows(rows) {
   };
 }
 
+function filteredSummaryForRows(rows) {
+  const metrics = metricsForRows(rows);
+  const differenceTotal = rows.reduce((sum, row) => sum + Number(row["差距"] || 0), 0);
+  const progressValues = rows
+    .map(row => row["进度"])
+    .filter(value => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)))
+    .map(value => Number(value).toFixed(6));
+  const uniqueProgressValues = [...new Set(progressValues)];
+  return {
+    count: rows.length,
+    target_total: metrics.target_total,
+    current_total: metrics.current_total,
+    difference_total: differenceTotal,
+    completion: metrics.completion,
+    progress: uniqueProgressValues.length === 1 ? Number(uniqueProgressValues[0]) : null,
+    progress_note: uniqueProgressValues.length > 1 ? "多值" : "",
+    behind_count: metrics.behind_count,
+  };
+}
+
+function renderFilteredSummary(rows) {
+  const summary = filteredSummaryForRows(rows);
+  const progressText = summary.progress_note || fmtPercent(summary.progress) || "-";
+  const items = [
+    ["当前筛选", `${fmtNumber(summary.count)} 条`],
+    ["目标", fmtNumber(summary.target_total)],
+    ["现状", fmtNumber(summary.current_total)],
+    ["差距", fmtNumber(summary.difference_total)],
+    ["完成率", fmtPercent(summary.completion) || "-"],
+    ["进度", progressText],
+    ["落后", `${fmtNumber(summary.behind_count)} 条`],
+  ];
+  document.getElementById("filteredSummary").innerHTML = items
+    .map(([label, value]) => `
+      <div class="filtered-summary-item">
+        <span>${label}</span>
+        <strong>${value}</strong>
+      </div>
+    `)
+    .join("");
+}
+
 function renderDepartmentMetrics() {
   const tbody = document.getElementById("departmentMetricsBody");
   tbody.innerHTML = "";
@@ -258,6 +300,7 @@ function render() {
   document.getElementById("chipFast").textContent = `快 ${activeRows().filter(row => rowStatus(row).text === "快").length}`;
   const rows = filteredRows();
   state.currentRows = rows;
+  renderFilteredSummary(rows);
   const department = document.getElementById("filterDepartment").value;
   document.getElementById("tableTitle").textContent = state.chip === "behind"
     ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
@@ -694,13 +737,18 @@ function exportCurrentRows() {
     toast("当前视图没有可导出的数据");
     return;
   }
-  exportRows(state.currentRows, `summary_current_view_${state.scope}.csv`);
+  exportRows(state.currentRows, `summary_current_view_${state.scope}.csv`, filteredSummaryForRows(state.currentRows));
 }
 
-function exportRows(rows, filename) {
+function exportRows(rows, filename, summary = null) {
   const headers = tableColumns;
   const escape = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const summaryLines = summary ? [
+    ["当前筛选", `${summary.count} 条`, "目标", summary.target_total, "现状", summary.current_total, "差距", summary.difference_total, "完成率", fmtPercent(summary.completion), "进度", summary.progress_note || fmtPercent(summary.progress), "落后", `${summary.behind_count} 条`].map(escape).join(","),
+    "",
+  ] : [];
   const lines = [
+    ...summaryLines,
     headers.join(","),
     ...rows.map(row => headers.map(key => escape(row[key])).join(",")),
   ];
