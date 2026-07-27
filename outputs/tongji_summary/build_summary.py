@@ -112,6 +112,29 @@ def validate_department_term_dates(target):
             raise ValueError(f"target 中同学部、同一期次的{column}不一致: {labels}")
 
 
+def grade_order_for_rows(df):
+    return df.apply(
+        lambda row: GRADE_ORDER.get(row["学部"], {}).get(
+            row["年级"],
+            len(GRADE_ORDER.get(row["学部"], {})) + 1,
+        ),
+        axis=1,
+    )
+
+
+def sort_summary_rows(df):
+    data = df.copy()
+    data["年级顺序"] = grade_order_for_rows(data)
+    return (
+        data.sort_values(
+            ["学部", "期次", "线索渠道二级分类", "年级顺序", "年级", "价体"],
+            kind="stable",
+        )
+        .drop(columns="年级顺序")
+        .reset_index(drop=True)
+    )
+
+
 def business_progress_days(start_date, end_date):
     days = pd.date_range(start_date, end_date, freq="D")
     return sum(day.weekday() != REST_WEEKDAY for day in days)
@@ -221,20 +244,7 @@ def build_summary(demo, target):
         target_summary.merge(current_summary, on=DIMENSIONS, how="outer")
         .fillna({"目标": 0, "现状": 0})
     )
-    summary["年级顺序"] = summary.apply(
-        lambda row: GRADE_ORDER.get(row["学部"], {}).get(
-            row["年级"],
-            len(GRADE_ORDER.get(row["学部"], {})) + 1,
-        ),
-        axis=1,
-    )
-    summary = (
-        summary.sort_values(
-            ["学部", "期次", "线索渠道二级分类", "价体", "年级顺序", "年级"],
-            kind="stable",
-        )
-        .drop(columns="年级顺序")
-    )
+    summary = sort_summary_rows(summary)
     summary["目标"] = summary["目标"].astype(int)
     summary["现状"] = summary["现状"].astype(int)
     summary["差距"] = summary["现状"] - summary["目标"]
