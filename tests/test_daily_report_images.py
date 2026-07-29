@@ -4,11 +4,11 @@ import pandas as pd
 
 from reports.build_daily_report_images import (
     LEC1_CHANNELS,
-    LEC1_TERM,
     channel_label,
     filter_lec1_data,
     lec1_actual_shares,
     lec1_channel_counts,
+    latest_lec1_term,
     latest_target_term,
     progress_gap,
     remaining_days,
@@ -70,21 +70,20 @@ class Lec1ChannelsTest(unittest.TestCase):
         self.assertEqual(
             LEC1_CHANNELS,
             [
-                ("YZY", "out_wxst_wxstqt_1774944753086", 2900, 0.49),
-                ("WC", "out_wxst_wxstqt_1774944782661", 1000, 0.17),
-                ("RQ", "out_wxst_wxstqt_1774945025540", 1000, 0.17),
-                ("JJ", "out_wxst_wxstqt_1774945094967", 1000, 0.17),
-                ("SH9.9", "out_wxst_wxstqt_1774944710158", 600, 1.0),
+                ("YZY", "out_wxst_wxstqt_1774944753086", 4400, 0.54),
+                ("WC", "out_wxst_wxstqt_1774944782661", 1800, 0.22),
+                ("RQ", "out_wxst_wxstqt_1774945025540", 1000, 0.12),
+                ("JJ", "out_wxst_wxstqt_1774945094967", 1000, 0.12),
             ],
         )
-        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 6500)
+        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 8200)
 
-    def test_scope_matches_progress_summary_without_payment_or_intake_cutoff(self):
+    def test_scope_matches_progress_summary_without_intake_cutoff(self):
         demo = pd.DataFrame(
             [
                 {
                     "学部": "小学",
-                    "期次": "暑_11",
+                    "期次": "暑_12",
                     "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
@@ -117,7 +116,7 @@ class Lec1ChannelsTest(unittest.TestCase):
                 },
                 {
                     "学部": "小学",
-                    "期次": "暑_11",
+                    "期次": "暑_12",
                     "线索渠道二级分类": "LEC内测",
                     "价体": 990,
                     "年级": "三年级",
@@ -140,13 +139,23 @@ class Lec1ChannelsTest(unittest.TestCase):
                     "target_time": "2026-07-15",
                     "进量日期": "2026-07-09",
                 },
+                {
+                    "学部": "小学",
+                    "期次": "暑_12",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "目标": 100,
+                    "target_time": "2026-07-29",
+                    "进量日期": "2026-07-23",
+                },
             ]
         )
 
         result = filter_lec1_data(demo, target)
 
-        self.assertEqual(LEC1_TERM, "暑_11")
-        self.assertEqual(result["custom_uid"].tolist(), ["u1", "u3", "u4"])
+        self.assertEqual(latest_lec1_term(target), "暑_12")
+        self.assertEqual(result["custom_uid"].tolist(), ["u1"])
 
     def test_intake_uses_order_volume_with_custom_uid_deduplication(self):
         demo = pd.DataFrame(
@@ -195,7 +204,7 @@ class Lec1ChannelsTest(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(counts[yzy_index], 1)
 
-    def test_actual_share_uses_one_yuan_denominator_and_sh_9_9_own_denominator(self):
+    def test_actual_share_uses_one_yuan_denominator(self):
         data = pd.DataFrame(
             [
                 {"价体": 100, "custom_uid": "y1", "last_from": "out_wxst_wxstqt_1774944753086"},
@@ -207,7 +216,7 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         shares = lec1_actual_shares(data)
 
-        self.assertEqual(shares, [2 / 3, 0, 1 / 3, 0, 1])
+        self.assertEqual(shares, [2 / 3, 0, 1 / 3, 0])
 
 
 class StatusTextTest(unittest.TestCase):

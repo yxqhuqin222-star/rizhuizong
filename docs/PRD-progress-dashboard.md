@@ -1,275 +1,943 @@
-# PRD — Progress Dashboard
-
-## 1. Summary
-
-This is the canonical product specification and calculation reference for the local daily progress dashboard. The dashboard reads daily `demo` data and weekly `target` data, shows the latest-term progress by default, and exports summaries and broadcast images.
-
-## 2. Contacts
-
-| Name | Role | Comment |
-| --- | --- | --- |
-| User | Product owner and operator | Uses the dashboard each morning to inspect progress and export data. |
-| Codex | Builder | Implements the local web app, data processing, and documentation. |
-
-## 3. Background
-
-The current workflow uses Excel files:
-
-- `tongji_demo.xlsx` changes daily.
-- `tongji_target.xlsx` changes weekly.
-- A generated `summary` table compares target, current status, gap, completion rate, and progress.
-
-The original Excel workflow has been implemented as a local web dashboard so daily monitoring is faster and less manual.
-
-## 4. Objective
-
-The objective is to build a local web dashboard that makes latest-term progress easy to inspect and broadcast after each daily data upload.
-
-### Key Results
-
-- KR1: After uploading a new `demo` file, the dashboard regenerates summary data without manual script edits.
-- KR2: The default dashboard view shows only each `学部`'s latest `期次`.
-- KR3: The user can switch to all terms through filtering.
-- KR4: The user can export latest-term summary, full summary, and query results.
-- KR5: A date + `last_from` natural-language query returns `sum(成单量)` with matched row count.
-- KR6: The user can generate department broadcast images and send them to the DingTalk group robot from the dashboard.
-
-## 5. Market Segment(s)
-
-The first user is an internal operator or business owner who checks daily progress against weekly targets. The job is not broad BI exploration. The job is fast operational monitoring.
-
-Constraints:
-
-- The solution should run locally.
-- The data source is Excel.
-- V1 should not require login, database setup, or cloud deployment.
-
-## 6. Value Proposition(s)
-
-The dashboard helps the user:
-
-- Avoid rebuilding the same summary manually each morning.
-- See the latest active term first.
-- Keep historical terms available but out of the default view.
-- Export data for follow-up work.
-- Send daily progress images to the operating group without manually assembling screenshots.
-- Ask simple natural-language questions without manually filtering raw Excel rows.
-
-## 7. Solution
-
-### 7.1 UX / Prototype
-
-The current prototype is:
-
-- [design-demos/summary_dashboard_v1.html](../design-demos/summary_dashboard_v1.html)
-- [design-demos/summary_dashboard_v1.png](../design-demos/summary_dashboard_v1.png)
-- [design-demos/live_dashboard_with_dingtalk.png](../design-demos/live_dashboard_with_dingtalk.png)
-
-V1 layout:
-
-- Left sidebar:
-  - Upload daily demo.
-  - Update weekly target.
-  - Export latest term.
-  - Export full summary.
-  - Export query details.
-  - Natural-language query entry.
-- Main content:
-  - KPI cards.
-  - Latest-term summary table.
-  - Filters for `学部`, `期次`, `线索渠道二级分类`, `价体`, and keyword.
-
-### 7.2 Key Features
-
-#### Reload and refresh
-
-- `上传今日 demo` reloads the fixed project-root `tongji_demo.xlsx`.
-- `更新 target` reloads the fixed project-root `tongji_target.xlsx`.
-- Validate required fields.
-- Regenerate Summary and all broadcast images before reporting success.
-- Record and display the successful upload/reload time for each document.
-- File modification, page refresh, summary regeneration, and service restart must not change the displayed upload time.
-- Before the first successful upload/reload record exists, display `尚未上传`.
-- If the managed local service restarts during an update, retry the request once.
-- After a local reload succeeds, sync the latest state, workbook, and broadcast images to the production read-only site.
-- If online sync fails, keep the local reload result and show the sync failure in the update status.
-
-#### Summary calculation
-
-Dimensions:
-
-- `学部`
-- `期次`
-- `线索渠道二级分类`
-- `价体`
-- `年级`
-
-Measures:
-
-- `目标 = sum(目标)`
-- `现状 = count(distinct custom_uid)` within each complete statistical dimension for all demo rows in the same `学部` and `期次`; do not exclude rows earlier than target `进量日期`; rows without `custom_uid` are counted separately.
-- `差距 = 现状 - 目标`
-- `完成率 = 现状 / 目标`
-- `下单日期 = max(下单日期)` within each item, for detail display
-- `进量日期 = max(进量日期)` from target within each item
-- `当前日期 = max(下单日期)` from demo within the same `学部` and `期次`；三个学部可使用各自不同的最新下单日期。
-- If `当前日期 < 进量日期`, `进度 = 0`; if `进量日期 <= 当前日期 < target_time`, `进度 = min(业务进度日数, 5) / 6`，其中业务进度日从 `进量日期` 到 `当前日期` 按天计数、周一休息不计入；if `当前日期 >= target_time`, `进度 = 100%`.
-- Progress is clamped to `0%` through `100%`.
-
-Rules:
-
-- `线索渠道二级分类` values beginning with `外部微转-` are grouped as `外部微转-*`.
-- demo 中的 `常规外呼` 按完整统计维度无法命中 target 时保留为仅现状项，不改归其他渠道。其他渠道无法命中时，改用同一 `学部`、`期次`、`价体`、`年级`寻找 target 渠道；只有一个候选时归入唯一候选，多个候选时优先归入 `常规外呼`，没有 `常规外呼` 时归入 `LEC内测`，两个优先渠道都不存在时归入 `未报量`，没有候选时保留为仅现状项。
-- `现状` and `成单量` are counted by `学部` and `期次` regardless of target `进量日期`; `进量日期` continues to drive only `进度`, `时间进度`, and `剩余天数`.
-- 原始文件中的 `价体` 保持不变；看板、查询结果和导出文件统一显示为原始值除以 100，并去除无意义的小数位，例如 `0→0`、`100→1`、`990→9.9`、`1880→18.8`、`2880→28.8`。
-- All rows in the same `学部` and `期次` use the same current date for progress calculation, regardless of channel, price, or grade.
-- Within one `学部` and `期次`, `target_time` and `进量日期` must each be unique; generation stops with an error if either field has conflicting values.
-- Rows without a department-term current date, `target_time`, or `进量日期` have no progress value.
-- Status priority is `未开单` / `仅现状` / `落后` / `已完成`, then `快` when `完成率 - 进度 >= 10` percentage points; remaining rows are `正常`. Only rows with `目标 > 0` can be classified as `落后`. Rows with `目标 = 0` and `现状 > 0` are `仅现状`; rows with `目标 = 0` are not included in the behind count.
-
-#### Default latest-term view
-
-- For each `学部`, identify the latest `期次` from the `target` table.
-- Latest `期次` order is `春 < 暑 < 秋 < 寒`; within the same season, compare the numeric suffix.
-- If a `demo` row belongs to a newer term that does not exist in the `target` table, keep it in full Summary but exclude it from the default latest-term view.
-- Default table and KPI cards use only those rows.
-- The overview shows separate primary, middle, and high school rows; it does not show aggregate or self-study rows.
-- The latest-term detail table additionally shows `自拼` rows from the newest `demo` term as current-only rows when `自拼` has no target rows. These rows are for inspecting current intake only and are excluded from KPI cards, latest-term exports, and broadcast images.
-- The detail view defaults to the `快` quick filter.
-- Clicking a department's lagging-item count opens the latest-term detail filtered to that department and rows whose completion rate is below progress.
-- The user can select all terms or a specific term through filters.
-- The detail view shows a current-filter summary above the table and below the filters. It updates with department, term, channel, payment, order-date, keyword, and quick-filter changes. The summary shows row count, target total, current total, difference total, completion, progress, and behind count.
-- Current-filter summary completion is calculated as `现状合计 / 目标合计`; it must not average row-level completion rates. Target, current, and difference use totals from the filtered detail rows.
-- Current-filter summary progress displays the single unique filtered progress value when one exists. If filtered rows contain multiple progress values, the progress field displays `多值` instead of mixing different business schedules into one number.
-
-#### Export
-
-- Export latest-term summary.
-- Export full summary.
-- Export query results.
-- Export current detail view with the same current-filter summary shown above the rows.
-- Export daily progress broadcast images for `小学`, `初中`, and `高中`.
-- Broadcast daily progress images for `小学`, `初中`, and `高中` to the DingTalk group robot.
-- Image downloads open in a new browser tab and leave the dashboard open.
-
-#### Daily broadcast images and DingTalk delivery
-
-The dashboard treats daily broadcast as a core delivery flow, not only as file export. After `demo` or `target` is reloaded successfully, the system regenerates Summary, workbook output, and all broadcast images from the same calculation result before reporting success.
-
-Broadcast image outputs:
-
-- `小学每日招生进度播报`: [reports/daily_progress/primary_daily_progress.png](../reports/daily_progress/primary_daily_progress.png)
-- `初中每日招生进度播报`: [reports/daily_progress/middle_daily_progress.png](../reports/daily_progress/middle_daily_progress.png)
-- `高中每日招生进度播报`: [reports/daily_progress/high_daily_progress.png](../reports/daily_progress/high_daily_progress.png)
-- `lec内测小学量级播报`: [reports/daily_progress/lec1_share.png](../reports/daily_progress/lec1_share.png)
-
-Dashboard prototype with DingTalk controls:
-
-- [design-demos/live_dashboard_with_dingtalk.png](../design-demos/live_dashboard_with_dingtalk.png)
-
-User actions:
-
-- Download `小学`, `初中`, `高中`, and `lec内测小学量级` broadcast images from the dashboard.
-- Send `小学`, `初中`, `高中`, and `lec内测小学量级` broadcast images to the DingTalk group robot.
-- Keep the dashboard page open when opening or downloading broadcast images.
-
-Daily progress broadcast field mapping:
-
-- Scope: only each department's latest `期次` from the `target` table; latest `期次` uses `春 < 暑 < 秋 < 寒` and then numeric suffix order; historical terms and demo-only newer terms are not shown in broadcast images.
-- `渠道展示 = 线索渠道二级分类 + 格式化后的价体`
-- `招生目标 = 目标`
-- `进度GAP = 时间进度 - 招生进度`，两个进度均按页面展示口径限制在 `0%–100%`，并保留正负号。
-- 每期按 6 个业务日折算，每周一为业务休息日；目标日及以后 `剩余天数 = 0`，目标日前 `剩余天数 = max(6 - 当前进度阶段, 1)`，其中 `当前进度阶段 = 进度 × 6`。剩余天数与进度使用同一计算结果，不再按自然日期相减。
-- `状态` uses the same classification as the dashboard.
-- Grade rows use business order: 小学二至六年级、初中初一至初三、高中高一至高三。
-- `lec内测小学量级` 固定统计小学 `LEC内测`、1 元数据，期次取 target 表中该范围的最新期次，渠道归属和去重口径与进度表 `现状` 一致：按学部期次全量统计，不按进量日期过滤；未命中 target 的渠道按 Summary 规则归属，同一统计范围内按 `custom_uid` 去重。渠道顺序与报量为：YZY 4400、WC 1800、RQ 1000、JJ 1000；`进量` 直接取对应渠道的 1 元成单量，渠道按完整 `last_from` 精确匹配。`目标占比` 固定为 YZY 54%、WC 22%、RQ 12%、JJ 12%；`实际占比` 按 1 元价体计算。
-
-DingTalk broadcast note:
-
-- The custom robot sends a markdown image message with the required keyword `成单`.
-- For group members to render the image reliably, the image URL should be reachable from DingTalk clients. Configure `DINGTALK_REPORT_BASE_URL` when the local service is exposed through an accessible host.
-- If the image must be uploaded before DingTalk delivery, configure `REPORT_IMAGE_UPLOAD_URL` and `REPORT_UPLOAD_TOKEN`.
-- The DingTalk webhook is configured with `DINGTALK_WEBHOOK`; missing configuration should produce a clear local error instead of silently reporting success.
-
-#### Natural-language query V1
-
-Supported query behavior:
-
-- Date + channel alias, `last_from`, or shared business dimensions + `成单量` / `进量` / `目标`.
-- Channel aliases are resolved through `config/channel_aliases.csv`.
-- Relative dates such as `昨天` resolve from the current date.
-- `LLM9.9` resolves to `线索渠道二级分类 = LLM外呼` and `价体 = 990`.
-- Query vocabulary is built from values in both `demo` and `target`.
-- 字段值匹配忽略英文大小写、空格、下划线和连字符；例如 `lec内测`、`L-E_C 内测` 均匹配实际字段值 `LEC内测`。存在多个匹配值时必须要求用户确认，不能静默选择。
-- Shared dimensions can be combined; `成单量` comes from `demo`, while `目标` comes from `target`.
-- `小初高各学部` and `三个学部分别` return per-department results and a combined total.
-- If the metric is omitted, use `成单量` without asking for confirmation.
-- When a required condition is missing, the page asks for one missing condition at a time instead of guessing.
-- Clarification is limited to two rounds and is stored only in the current page session.
-
-Example:
-
-- `6月23日，out_wxst_wxstqt_1774944753086 的成单量是多少？`
-- `YZY渠道的进量` → asks `你想查询哪个时间段的？` → `6月27日`.
-
-Output:
-
-- Sum of `成单量`.
-- Matched row count.
-- Paginated matching rows, defaulting to 10 rows per page with 10 / 20 / 50 options.
-- Exportable full matching rows.
-- The original query, clarification questions, and answers stay visible until completion or restart.
-
-### 7.3 Technology
-
-The current implementation uses:
-
-- Python local HTTP server.
-- Pandas for Excel processing.
-- Static HTML/CSS/JavaScript frontend.
-- File-based storage in the project directory.
-
-No database, login, external API, or cloud service is required for V1.
-
-### 7.4 Assumptions
-
-- The user runs this locally.
-- Excel field names stay aligned with the confirmed Chinese names.
-- `target_time` remains the target-date field name.
-- Latest term is determined from the `target` table by season order `春 < 暑 < 秋 < 寒`; terms in the same season use numeric suffix order, such as `暑_10 > 暑_9`.
-- Natural-language query remains rule-based and does not use an external model.
-- Missing conditions are never inferred from defaults; the user must confirm them.
-
-## 8. Release
-
-### V1
-
-- Local dashboard, managed restart, and health check.
-- Reload fixed demo/target files.
-- Regenerate summary.
-- Default latest-term view.
-- Filters and KPI cards.
-- Export latest/full/query data.
-- Rule-based natural-language query with at most two clarification rounds.
-- Separate department broadcast images and DingTalk robot delivery.
-
-### Verification
-
-- Summary totals and calculation fields match the final generated workbook.
-- Latest-term metrics use only the latest target term for each department.
-- Query examples return the expected total, matched-row count, and export rows.
-- Latest/full/query downloads return valid files.
-- Broadcast image downloads return valid PNG files generated from the latest Summary.
-- Broadcast sample images listed in this PRD exist and are generated from the current Summary.
-- DingTalk broadcast payload uses a markdown image message, includes the keyword `成单`, and uses an image URL reachable by DingTalk clients when real group delivery is enabled.
-- DingTalk payload generation can be verified without sending a real group message.
-- The running service returns a healthy response from `/api/health`.
-- Production `/api/state` and `/download/workbook` can serve the latest synced cloud copy, with static build output as fallback.
-
-### V2
-
-- Richer natural-language analysis.
-- Trend charts.
-- Historical upload records.
-- Editable targets in the page.
-- User accounts or deployment, if needed.
+# 日追踪看板 PRD
+
+## AI 速读卡
+
+- 产品一句话：日追踪看板是本地招生进度运营看板，读取每日 demo 和每周 target，生成可信 Summary、网页看板、Excel、播报图和钉钉播报。
+- 核心循环：更新数据 -> 重算统一 Summary -> 检查最新期次进度 -> 筛选定位落后项 -> 导出或播报。
+- 目标平台：本地 Web 看板为主，线上只读看板作为同步展示；不要求账号、数据库或付费云服务。
+- 硬约束：所有汇总、明细、工作簿、播报图和接口必须来自同一计算结果；同学部同一期次的 target_time 与进量日期必须唯一。
+- 推荐默认：保持 Python 本地 HTTP 服务、Pandas 计算、静态 HTML/CSS/JS 前端、文件式状态。
+- 发挥空间：可以优化视觉层级、筛选效率、空状态、错误恢复、播报图细节，但不能改变指标口径。
+- P0 验收：上传 demo 或 target 后，Summary、工作簿、四张播报图、页面指标和健康接口都能用当前数据验证。
+- 最容易翻车：把当前日期、下单日期、进量日期、target_time 混用，或让不同输出各自二次计算。
+- 超预期机会：让落后项一键钻取、同步失败可补偿、播报前预览真实图片、自然语言查询保留解释链路。
+
+## 第一章：产品概述
+
+日追踪看板是一款本地招生进度运营看板，让运营负责人能够每天用 Excel 源文件检查各学部最新期次的目标达成、落后项和可播报结果，而无需手工重做透视表、截图和群消息。
+
+### 1.1 差异化对比表
+
+| 功能 | 竞品 | 本产品 | 实现方式 |
+|---|---|---|---|
+| 最新期次默认视图 | 通用 Excel 或 BI 往往展示全量数据，需要人工筛选 | 默认只展示小学、初中、高中各自 target 表里的最新期次，同时保留全量切换 | 期次按 春、暑、秋、寒 和数字后缀排序，从 target 表确定默认范围 |
+| 指标口径一致 | 表格、截图和群播报容易由不同公式生成 | 页面 KPI、明细表、Excel、播报图和接口共享同一 Summary | `outputs/tongji_summary/build_summary.py` 生成统一 payload，其他输出只消费该结果 |
+| 每日播报闭环 | 常见做法需要截图、修图、上传、复制消息 | 看板内下载小学、初中、高中、lec内测小学量级图片，并可发送到钉钉机器人 | reload 成功后先生成 Summary、工作簿、HTML 和 PNG，再暴露下载与播报接口 |
+| 规则化自然语言查询 | Excel 需要用户记住筛选字段和别名 | 支持日期、渠道别名、last_from、学部、期次、价体、年级等组合查询，并返回解释和明细 | 从 demo 和 target 提取词表，缺关键条件时逐轮澄清，不使用外部模型 |
+| 线上只读同步 | 本地文件不便分享当天结果 | 本地更新后同步状态、工作簿和播报图到线上只读页面，失败时保留本地结果并进入补偿队列 | 本地服务调用线上接口，缺 token 或网络失败时写入 `state/sync_queue.json` |
+
+### 1.2 三类用户画像
+
+| 角色 | 核心目标 | 对现有工具最大的不满 | 让他们愿意切换的那一个功能 |
+|---|---|---|---|
+| 每日运营负责人 | 早上快速判断三个学部最新期次是否落后 | Excel 透视表和截图每天重复劳动，容易漏筛选条件 | 上传今日 demo 后自动重算并直接显示落后项 |
+| 招生业务负责人 | 看懂目标、现状、差距、完成率和时间进度是否一致 | 群里图片和表格数字来源不清，追责困难 | 页面、Excel、播报图使用同一 Summary，可互相核验 |
+| 执行同学或助理 | 按渠道、价体、年级定位需要跟进的项并导出明细 | 不熟悉字段名、last_from 和渠道别名 | 可用自然语言查询和当前视图导出明细 |
+
+### 1.3 可行性边界
+
+| 在范围内（及原因） | 明确排除在外（及原因） |
+|---|---|
+| 本地读取固定项目根目录 `tongji_demo.xlsx` 和 `tongji_target.xlsx`，因为当前数据交付已经以这两个 Excel 为中心 | 在线多人编辑 target，因为当前 V1 不引入账号、权限和数据库 |
+| 生成 Summary CSV、Summary Excel、网页看板数据、播报 HTML/PNG，因为这些是现有日常交付物 | 复杂 BI 建模、拖拽报表和任意 SQL 分析，因为会稀释当前进度监控目标 |
+| 通过本地服务触发重算、下载和钉钉播报，因为操作者需要在一个页面完成闭环 | 保证钉钉客户端一定能访问本机地址，因为这取决于公网可达 URL 和网络环境 |
+| 线上只读同步当前状态、工作簿和播报图，因为分享方只需要查看最新结果 | 把线上只读站点作为主写入系统，因为本地 Excel 仍是数据源 |
+| 规则化自然语言查询日期、字段值、别名、学部拆分和导出 | 接入外部大模型理解任意业务问题，因为当前版本必须免费、可控、可验证 |
+
+### 1.4 约束分层
+
+| 硬约束 | 推荐默认 | 发挥空间 |
+|---|---|---|
+| 同名指标在看板汇总、明细表、工作簿、播报图和接口中必须来自同一计算结果 | 保持 `build_summary.py` 作为指标唯一入口 | 可以改善代码组织，但不得让输出端重新实现公式 |
+| 学部级当前日期必须来自 demo 中同学部同一期次的最大下单日期 | 页面默认展示小学、初中、高中三行概览 | 可以增加更清晰的日期解释和 hover 文案 |
+| target 中同学部同一期次的 `target_time` 和 `进量日期` 出现多个值时停止生成 | 错误直接显示中文字段名和冲突学部期次 | 可以提供下载错误报告或复制错误详情 |
+| 价体展示统一为原始值除以 100，去除无意义小数位 | 保留源文件原始值，不回写 Excel 源文件 | 可以在 UI 中加单位标识 |
+| 自然语言查询不能在多义值中静默选择 | 每次只问一个缺失条件，最多澄清两轮 | 可以优化示例问题和解释视图 |
+| 钉钉播报缺配置时必须报错，不能假装成功 | 图片使用 markdown image message 且包含关键词 `成单` | 可以先展示预览再发送 |
+
+## 第二章：整体布局与导航
+
+### 2.1 顶层页面结构
+
+```text
++--------------------------------------------------------------------------------+
+| 顶部栏（100% x 64px）                                                           |
+| 日追踪看板 / 目标期次说明 / 查看全部期次 / 导出 Excel / 重新生成 Summary        |
++----------------------------+---------------------------------------------------+
+| 左侧操作栏（260px）        | 主内容区（剩余宽度）                              |
+| +------------------------+ | +-----------------------------------------------+ |
+| | 自然语言查询入口       | | 各学部最新期次概览表                            | |
+| | demo 状态与上传按钮    | | 小学 目标/现状/完成率/进度/落后                 | |
+| | target 状态与更新按钮  | | 初中 目标/现状/完成率/进度/落后                 | |
+| | 导出按钮组             | | 高中 目标/现状/完成率/进度/落后                 | |
+| | 播报图下载按钮组       | +-----------------------------------------------+ |
+| | 钉钉播报按钮组         | +-----------------------------------------------+ |
+| +------------------------+ | | 筛选区 / 当前筛选汇总 / 快速筛选 / 明细表       | |
+|                            | +-----------------------------------------------+ |
++----------------------------+---------------------------------------------------+
+```
+
+这个布局适合每日运营监控：左侧承载低频但关键的输入输出动作，主区承载高频查看与定位动作。用户进入页面后先看到三个学部是否落后，再决定钻取明细、导出或播报。
+
+### 2.2 主要导航层级
+
+```text
+日追踪看板
++-- 进度监控
+|   +-- 三学部概览
+|   +-- 最新期次明细
+|   +-- 全部期次明细
+|   +-- 当前筛选汇总
++-- 数据更新
+|   +-- 上传今日 demo
+|   +-- 更新 target
+|   +-- 线上同步状态
++-- 输出交付
+|   +-- Summary CSV
+|   +-- Summary Excel
+|   +-- 当前视图 CSV
+|   +-- 查询明细 CSV
+|   +-- 每日进度播报图
+|   +-- 钉钉群播报
++-- 自然语言查询
+    +-- 提问
+    +-- 澄清
+    +-- 结果解释
+    +-- 分页明细
+```
+
+### 2.3 核心流程
+
+```text
+用户点击 上传今日 demo 或 更新 target
+    |
+    v
+本地服务读取固定 Excel
+    |
+    +-- 缺字段或日期冲突 --> 返回错误，页面保留旧数据并展示原因
+    |
+    v
+生成统一 Summary payload
+    |
+    v
+生成工作簿和四张播报图
+    |
+    +-- 生成失败 --> 返回错误，页面提示本地输出未完成
+    |
+    v
+刷新页面状态
+    |
+    +-- 线上同步成功 --> 显示线上已同步时间
+    |
+    +-- 线上同步失败 --> 显示待补偿同步并保留本地结果
+```
+
+## 第三章：核心模块详细设计
+
+### 第 3.1 节 数据更新与重算模块
+
+#### a) ASCII 图
+
+```text
++--------------------------------------+
+| 数据更新                              |
+| 今日 demo                             |
+| 当前：tongji_demo.xlsx                |
+| 上传时间：2026-07-28 09:12:04         |
+| 按钮：上传今日 demo                  |
+| 状态：读取成功，summary 已更新        |
+|                                      |
+| 每周 target                           |
+| 当前：tongji_target.xlsx              |
+| 上传时间：2026-07-28 09:13:26         |
+| 按钮：更新 target                    |
+| 状态：线上已同步：2026-07-28T09:14    |
++--------------------------------------+
+```
+
+#### b) 交互流程
+
+```text
+点击上传今日 demo
+    |
+    v
+POST /api/reload-demo
+    |
+    +-- 成功 --> 记录上传时间 -> 重算 Summary -> 生成工作簿和播报图 -> 刷新页面
+    |
+    +-- Excel 缺字段 --> 返回缺失字段，页面展示错误，旧 Summary 不被误报为新结果
+    |
+    +-- 服务重启导致请求中断 --> 前端等待 1200ms 后重试一次，仍失败则提示刷新服务
+```
+
+```text
+点击更新 target
+    |
+    v
+POST /api/reload-target
+    |
+    +-- 成功且线上同步成功 --> 页面显示读取成功和同步时间
+    |
+    +-- target_time 或进量日期冲突 --> 停止生成并显示冲突学部/期次
+    |
+    +-- 线上同步失败 --> 本地结果保留，写入补偿队列并提示待自动补偿
+```
+
+#### c) 状态清单
+
+| 名称 | 触发条件 | 视觉标识 | 退出条件 |
+|---|---|---|---|
+| 未上传 | 没有成功记录 | 文件信息显示 `尚未上传` | 任一 reload 成功 |
+| 读取中 | 用户点击上传或更新 | 按钮禁用，状态显示处理中 | 请求返回成功或失败 |
+| 本地成功 | Summary、工作簿、播报图全部生成 | 绿色成功状态，显示上传时间 | 下一次更新 |
+| 待同步 | 本地成功但线上失败或缺 token | 黄色状态，显示重试次数 | `/api/retry-sync` 成功 |
+| 失败 | 字段缺失、日期冲突、脚本异常 | 红色错误状态，展示中文原因 | 用户修正文件后重新上传 |
+
+#### d) 依赖关系
+
+```text
+tongji_demo.xlsx + tongji_target.xlsx
+    |
+    v
+outputs/tongji_summary/build_summary.py
+    |
+    +-- writes summary_payload.json
+    +-- writes tongji_summary_current.csv
+    +-- writes tongji_summary_current.xlsx
+    |
+    v
+reports/build_daily_report_images.py
+    |
+    +-- writes primary_daily_progress.png
+    +-- writes middle_daily_progress.png
+    +-- writes high_daily_progress.png
+    +-- writes lec1_share.png
+```
+
+#### e) 待决问题
+
+- 此处未解决：是否需要支持浏览器选择任意 Excel 文件；当前默认固定读取项目根目录文件。
+- 此处未解决：线上同步失败后的自动重试频率是否要由 LaunchAgent 管理；当前以本地队列和手动 retry 接口为准。
+
+### 第 3.2 节 Summary 计算模块
+
+#### a) ASCII 图
+
+```text
++--------------------------------------------------------------------------------+
+| Summary 明细行                                                                  |
++------+--------+--------------+------+------+------------+------+-------+--------+
+| 学部 | 期次   | 渠道         | 价体 | 年级 | target_time| 目标 | 现状  | 进度   |
++------+--------+--------------+------+------+------------+------+-------+--------+
+| 小学 | 暑_10  | LEC内测      | 1    | 三年级 | 2026-07-30 | 800  | 624   | 83.3% |
+| 初中 | 暑_9   | 常规外呼     | 9.9  | 初二   | 2026-07-31 | 300  | 219   | 66.7% |
+| 高中 | 暑_8   | 外部微转-*   | 18.8 | 高一   | 2026-07-29 | 120  | 138   | 100%  |
++--------------------------------------------------------------------------------+
+```
+
+#### b) 交互流程
+
+```text
+读取 demo 和 target
+    |
+    v
+校验必填字段
+    |
+    +-- 缺字段 --> 抛出 `demo 缺少必要字段` 或 `target 缺少必要字段`
+    |
+    v
+校验同学部同一期次 target_time 与进量日期唯一
+    |
+    +-- 不唯一 --> 停止生成并列出冲突学部/期次
+    |
+    v
+聚合 target 与 demo
+    |
+    v
+渠道归属修正 -> outer merge -> 计算目标/现状/差距/完成率/进度 -> 排序 -> 输出
+```
+
+#### c) 状态清单
+
+| 名称 | 触发条件 | 视觉标识 | 退出条件 |
+|---|---|---|---|
+| 可计算 | 两个 Excel 字段完整且日期规则通过 | 重算进入下一步 | 输出文件写入成功 |
+| 字段缺失 | 必填字段不存在 | 错误列出缺失字段 | 修正 Excel 后重算 |
+| 日期冲突 | 同学部同一期次存在多个 target_time 或进量日期 | 错误列出冲突范围 | target 表修正为唯一日期 |
+| 仅现状行 | demo 有数据但 target 目标为 0 或无目标项 | 状态标记 `仅现状` | target 补充目标或筛选排除 |
+| 无进度值 | 缺当前日期、target_time 或进量日期 | 进度为空 | 源数据补齐日期 |
+
+#### d) 依赖关系
+
+- 读取：`tongji_demo.xlsx` 的下单日期、成单量、年级、学部、期次、价体、线索渠道二级分类、last_from、custom_uid。
+- 读取：`tongji_target.xlsx` 的期次、线索渠道二级分类、价体、学部、年级、目标、target_time、进量日期。
+- 写入：Summary payload、当前 Summary CSV、当前 Summary Excel、供播报图消费的统一明细。
+- 数据流方向：Excel 源文件 -> Summary 统一计算 -> 页面、导出、播报、查询，不允许反向修改源文件。
+
+#### e) 待决问题
+
+- 此处未解决：`custom_uid` 缺失行是否长期按行单独计数；当前硬约束是缺失时每行单独计入现状。
+- 此处未解决：自拼之外是否还会出现需要进入明细但排除 KPI 的特殊学部；当前只支持 `自拼`。
+
+#### f) 指标口径
+
+- 维度：学部、期次、线索渠道二级分类、价体、年级。
+- 目标：同完整维度内 `sum(目标)`。
+- 现状：同完整统计维度内按 `custom_uid` 去重；缺 `custom_uid` 的 demo 行按行单独计数。
+- 差距：`现状 - 目标`。
+- 完成率：`现状 / 目标`；目标为 0 时为空。
+- 下单日期：同明细项内最大下单日期，用于展示。
+- 当前日期：demo 中同学部同一期次最大下单日期；三个学部可不同。
+- 进量日期：target 中同明细项的最大进量日期，但同学部同一期次必须唯一。
+- target_time：target 中同明细项的最大目标日期，但同学部同一期次必须唯一。
+- 进度：当前日期早于进量日期为 0；当前日期在进量日期到目标日前，按业务日计数并排除周一，最大为 5/6；当前日期达到或超过 target_time 为 100%。
+- 状态：优先级为未开单、仅现状、落后、已完成、快、正常。只有目标大于 0 的行可为落后。
+- 价体展示：源文件原始值除以 100，去除无意义小数位，例如 0、1、9.9、18.8、28.8。
+- 外部微转归并：`线索渠道二级分类` 以 `外部微转-` 开头时展示为 `外部微转-*`。
+- demo 未命中 target 时：常规外呼保留为现状项；其他渠道按同学部、期次、价体、年级寻找 target 候选，唯一候选归入候选，多候选优先常规外呼，其次 LEC内测，再次未报量，无候选则保留现状项。
+
+### 第 3.3 节 最新期次监控模块
+
+#### a) ASCII 图
+
+```text
++--------------------------------------------------------------------------+
+| 各学部最新期次指标                                                       |
++------+--------+--------+----------+----------+----------+
+| 学部 | 目标   | 现状   | 完成率   | 进度     | 落后项   |
++------+--------+--------+----------+----------+----------+
+| 小学 | 7,200  | 6,148  | 85.4%    | 83.3%    | 12       |
+| 初中 | 3,900  | 2,711  | 69.5%    | 66.7%    | 8        |
+| 高中 | 2,400  | 2,503  | 104.3%   | 100.0%   | 0        |
++------+--------+--------+----------+----------+----------+
+```
+
+#### b) 交互流程
+
+```text
+打开页面
+    |
+    v
+GET /api/state
+    |
+    +-- 成功 --> 渲染三个学部最新期次概览和明细
+    |
+    +-- payload 不存在 --> 服务重算后返回
+    |
+    +-- 服务不可用 --> 页面 toast 提示加载数据失败
+```
+
+```text
+点击某学部落后项数量
+    |
+    v
+切换明细为最新期次 + 指定学部 + 落后筛选
+    |
+    +-- 落后项为 0 --> 按钮禁用
+    |
+    +-- 筛选后无行 --> 展示空表和当前筛选汇总 0 条
+```
+
+#### c) 状态清单
+
+| 名称 | 触发条件 | 视觉标识 | 退出条件 |
+|---|---|---|---|
+| 默认最新期次 | 页面首次加载 | chip 显示最新期次激活 | 用户切到全部期次 |
+| 全部期次 | 用户点击查看全部期次 | 标题和筛选提示变为全部期次 | 用户切回最新期次 |
+| 落后钻取 | 用户点击落后项数量 | 学部筛选锁定，chip 显示落后进度 | 清除筛选或切换 chip |
+| 筛选多进度 | 当前筛选含多个进度值 | 当前筛选汇总的进度显示 `多值` | 缩小筛选至单一进度 |
+| 空结果 | 筛选条件无匹配 | 表格为空，汇总为 0 条 | 修改筛选条件 |
+
+#### d) 依赖关系
+
+- 读取：`state.latestSummary`、`state.detailLatestSummary`、`state.metrics.latest`。
+- 写入：前端内存中的筛选状态、当前行集合、当前筛选汇总。
+- 数据流方向：API state -> 前端筛选 -> 当前视图导出，不回写后端。
+
+#### e) 待决问题
+
+- 此处未解决：默认 chip 是否固定为 `快`；现有文档要求细节视图默认快筛选，但当前页面也有最新期次 chip，需要实现者核对现状后统一。
+
+### 第 3.4 节 自然语言查询模块
+
+#### a) ASCII 图
+
+```text
++------------------------------------------------------------------------+
+| 自然语言查询                                                           |
+| 输入：YZY渠道的进量                                                     |
+| 系统：你想查询哪个时间段的？                                            |
+| 用户：6月27日                                                           |
+| 解释：日期=2026-06-27；渠道别名=YZY；指标=成单量                         |
+| 结果：成单量 128，匹配 42 行                                             |
+| 每页：10  20  50                 按钮：导出全部明细                     |
++------------------------------------------------------------------------+
+```
+
+#### b) 交互流程
+
+```text
+输入查询并提交
+    |
+    v
+POST /api/query
+    |
+    +-- 条件完整 --> 返回答案、解释、匹配行、分页信息，写入 query_result.csv
+    |
+    +-- 缺日期 --> 提问一个缺失条件，保留当前会话上下文
+    |
+    +-- 多个字段值匹配 --> 要求用户确认，不能静默选择
+```
+
+```text
+用户回答澄清问题
+    |
+    v
+带 context 再次 POST /api/query
+    |
+    +-- 两轮内完成 --> 展示结果
+    |
+    +-- 超过两轮仍不完整 --> 提示重新提问并保留历史
+    |
+    +-- 查询无匹配行 --> 展示 0 和空明细，可重新提问
+```
+
+#### c) 状态清单
+
+| 名称 | 触发条件 | 视觉标识 | 退出条件 |
+|---|---|---|---|
+| 输入中 | 打开查询面板 | 文本框聚焦，示例问题可点 | 提交查询 |
+| 待澄清 | 缺时间或多义字段 | 对话区显示系统问题 | 用户回答或重新提问 |
+| 有结果 | 条件完整且查询执行成功 | 答案、解释、分页表格显示 | 翻页、导出、重新提问 |
+| 无结果 | 条件完整但匹配 0 行 | 答案显示 0，表格为空 | 修改查询 |
+| 查询错误 | 字段无法解析或服务异常 | toast 和错误消息 | 重新提交 |
+
+#### d) 依赖关系
+
+- 读取：demo、target、`config/channel_aliases.csv`、当前查询 context。
+- 写入：前端查询会话、`outputs/tongji_summary/query_result.csv`。
+- 数据流方向：用户文本 -> 规则解析 -> demo 或 target 过滤 -> 汇总答案和明细导出。
+
+#### e) 待决问题
+
+- 此处未解决：是否允许查询跨日期区间；当前默认支持具体日期、相对日期和必要时间澄清。
+- 此处未解决：是否需要外部模型辅助理解复杂问题；当前默认保持规则化以降低成本和误判。
+
+### 第 3.5 节 播报图与钉钉模块
+
+#### a) ASCII 图
+
+```text
++--------------------------------------------+
+| 播报交付                                   |
+| 按钮：下载小学播报图  按钮：播报小学到钉钉 |
+| 按钮：下载初中播报图  按钮：播报初中到钉钉 |
+| 按钮：下载高中播报图  按钮：播报高中到钉钉 |
+| 按钮：下载1元占比图   按钮：播报1元占比到钉钉 |
+| 状态：成单播报已发送，图片地址可访问       |
++--------------------------------------------+
+```
+
+#### b) 交互流程
+
+```text
+点击下载播报图
+    |
+    v
+GET /download/report?dept=primary
+    |
+    +-- 图片当前 --> 新标签打开 PNG，原页面保留
+    |
+    +-- 图片过期 --> 先重新生成播报图，再返回 PNG
+    |
+    +-- dept 无效 --> 返回 400，页面提示请求失败
+```
+
+```text
+点击播报到钉钉
+    |
+    v
+POST /api/broadcast-report
+    |
+    +-- DINGTALK_WEBHOOK 缺失 --> 本地错误提示缺配置
+    |
+    +-- 图片公网 URL 不可用 --> 上传图片或提示配置 REPORT_IMAGE_UPLOAD_URL
+    |
+    +-- 发送成功 --> 返回钉钉响应并 toast 成功
+```
+
+#### c) 状态清单
+
+| 名称 | 触发条件 | 视觉标识 | 退出条件 |
+|---|---|---|---|
+| 图片已生成 | Summary 和图片存在且不早于源文件 | 下载按钮可用 | 源文件或脚本更新 |
+| 图片生成中 | reload 或首次下载触发生成 | 按钮处于请求中或页面等待 | PNG 写入成功 |
+| 配置缺失 | 缺 webhook、图片上传地址或 token | 中文错误提示 | 配置环境变量 |
+| 发送成功 | 钉钉接口返回成功 | toast 显示播报完成 | 下一次发送 |
+| 发送失败 | 钉钉接口错误或网络失败 | 展示接口错误信息 | 修改配置或重试 |
+
+#### d) 依赖关系
+
+- 读取：Summary Excel、demo、target、播报 HTML、环境变量。
+- 写入：四张播报 PNG、`reports/daily_progress/manifest.json`、钉钉 markdown image message。
+- 数据流方向：Summary -> HTML -> PNG -> 下载或公网图片 URL -> 钉钉群。
+
+#### e) 待决问题
+
+- 此处未解决：钉钉正式群是否要求图片必须先上传到公网；当前通过 `DINGTALK_REPORT_BASE_URL` 或上传接口兼容。
+- 此处未解决：是否要在发送前加入二次确认；当前页面按钮点击即发送。
+
+## 第四章：超越竞品的差异化功能
+
+### 第 4.1 节 统一计算结果驱动所有输出
+
+1. 竞品为何没有这个功能：此处未验证具体竞品。基于公开工具形态的推断，Excel、截图工具和通用 BI 常把计算、展示、导出、截图交给不同层处理，短期方便，但会让口径分散。
+2. 本产品如何实现：推荐以 Summary payload 为唯一事实源。页面、工作簿、播报图、线上只读 state 都从同一生成链路派生；输出端只做格式化，不重新解释公式。
+3. 交互流程：
+
+```text
+用户更新 Excel
+    |
+    v
+统一 Summary 生成
+    |
+    +-- 页面 KPI
+    +-- 明细表
+    +-- Excel 工作簿
+    +-- 播报图
+    +-- 线上只读 state
+```
+
+4. 风险与应对：最大风险是后来新增输出时复制公式。应对方式是在 PRD 和测试中要求所有新增输出读取 Summary，并新增回归测试比较核心字段。
+
+### 第 4.2 节 运营动作直接连接落后定位
+
+1. 竞品为何没有这个功能：此处未验证具体竞品。通用 BI 的默认目标是探索和展示，不会知道“落后项数量点击后应进入对应学部明细”这个业务动作。
+2. 本产品如何实现：三学部概览里的落后数量是按钮。点击后自动应用学部筛选和落后 chip，让用户直接进入需要跟进的行。
+3. 交互流程：
+
+```text
+看到 初中 落后项 8
+    |
+    v
+点击 8
+    |
+    v
+明细表 = 最新期次 + 初中 + 落后进度
+    |
+    v
+导出当前视图或继续按渠道筛选
+```
+
+4. 风险与应对：如果落后状态和概览数量计算不一致，用户会不信任入口。应对方式是概览、chip 和当前筛选汇总使用同一 `rowStatus` 逻辑，并用测试覆盖目标为 0、现状为 0、当前进度为空的边界。
+
+### 第 4.3 节 播报图成为产品闭环而非附件
+
+1. 竞品为何没有这个功能：此处未验证具体竞品。通用看板通常把图片导出视为附属能力，不负责群消息关键词、公网图片地址和业务排序。
+2. 本产品如何实现：reload 成功前必须完成图片重建；播报图字段、排序、剩余天数、状态和 Summary 一致；钉钉发送失败时显示真实配置问题。
+3. 交互流程：
+
+```text
+重算完成
+    |
+    v
+生成 小学 / 初中 / 高中 / lec内测小学量级 PNG
+    |
+    +-- 下载 --> 新标签打开图片
+    |
+    +-- 播报 --> 生成含 `成单` 关键词的 markdown image message
+```
+
+4. 风险与应对：钉钉客户端无法访问本地图片地址。应对方式是支持 `DINGTALK_REPORT_BASE_URL`、`REPORT_IMAGE_UPLOAD_URL` 和 `REPORT_UPLOAD_TOKEN`，并在缺配置时失败可见。
+
+### 第 4.4 节 低成本规则化自然语言查询
+
+1. 竞品为何没有这个功能：此处未验证具体竞品。大多数自然语言数据问答依赖模型推理，成本、口径和可解释性更难控制；Excel 手工筛选则要求用户懂字段。
+2. 本产品如何实现：不用外部模型，直接从 demo、target 和别名表构建词表，规则解析日期、指标和字段值，结果展示解释条件和匹配行。
+3. 交互流程：
+
+```text
+输入：6月27日YZY渠道的进量
+    |
+    v
+解析日期 + 渠道别名 + 默认指标成单量
+    |
+    +-- 唯一匹配 --> 汇总并展示明细
+    |
+    +-- 多义匹配 --> 要求确认具体字段值
+```
+
+4. 风险与应对：规则覆盖不了复杂表达。应对方式是只承诺当前支持的字段组合，对未知或多义查询请求澄清，不把模型猜测当答案。
+
+### 超预期机会
+
+- 当前筛选汇总中对“多值进度”给出可点击解释，列出涉及的学部、期次和日期，帮助用户理解为什么不能混算。
+- 播报前展示即将发送的图片缩略图和公网 URL 检查结果，减少误发。
+- 自然语言查询结果可一键转成当前明细筛选条件，让问答和看板互通。
+- 同步失败状态显示最近一次失败端点、重试次数和下一步操作，避免用户误以为线上已经更新。
+
+## 第五章：数据模型
+
+### 5.1 Summary payload
+
+```jsonc
+{
+  "version": "1.0", // 必填；payload 结构版本
+  "generatedAt": "2026-07-28T09:14:20+08:00", // 必填；本次 Summary 生成时间
+  "files": { // 必填；当前输入文件与记录时间
+    "version": "1.0", // 必填；文件信息结构版本
+    "demo": {
+      "name": "tongji_demo.xlsx", // 必填；demo 文件名
+      "uploaded_at": "2026-07-28 09:12:04" // 默认值: 尚未上传；成功 reload 的记录时间，不取文件 mtime
+    },
+    "target": {
+      "name": "tongji_target.xlsx", // 必填；target 文件名
+      "uploaded_at": "2026-07-28 09:13:26" // 默认值: 尚未上传；成功 reload 的记录时间，不取文件 mtime
+    }
+  },
+  "summary": { // 必填；完整 Summary 明细集合，以稳定行号或哈希为键
+    "row_001": {
+      "version": "1.0", // 必填；明细行结构版本
+      "学部": "小学", // 必填；允许值来自源文件，概览只统计小学、初中、高中
+      "期次": "暑_10", // 必填；期次文本，排序按季节和数字后缀
+      "线索渠道二级分类": "LEC内测", // 必填；外部微转系列归并为外部微转-*
+      "价体": 1, // 必填；展示值，源文件价体除以 100
+      "年级": "三年级", // 必填；按学部业务年级顺序排序
+      "target_time": "2026-07-30", // 必填；目标日期，同学部同一期次必须唯一
+      "进量日期": "2026-07-24", // 必填；业务进度起始日期，同学部同一期次必须唯一
+      "下单日期": "2026-07-28", // 默认值: null；该明细最大下单日期
+      "目标": 800, // 必填；非负整数，来自 target 聚合
+      "现状": 624, // 必填；非负整数，来自 demo 去重聚合
+      "差距": -176, // 必填；现状减目标
+      "完成率": 0.78, // 默认值: null；目标为 0 时为空
+      "进度": 0.833333 // 默认值: null；范围 0 到 1，缺日期时为空
+    }
+  },
+  "latestSummary": {}, // 必填；小学、初中、高中各自最新 target 期次行集合
+  "detailLatestSummary": {}, // 必填；最新期次明细集合，允许包含自拼现状行
+  "metrics": {
+    "version": "1.0", // 必填；指标结构版本
+    "latest": {
+      "target_total": 13500, // 必填；最新期次目标合计
+      "current_total": 11362, // 必填；最新期次现状合计
+      "completion": 0.8416, // 默认值: null；现状合计除目标合计
+      "avg_progress": 0.827, // 默认值: null；仅用于概览展示，不能替代明细唯一进度规则
+      "behind_count": 20 // 必填；目标大于 0 且完成率小于进度的行数
+    }
+  },
+  "reportUrls": { // 默认值: 空对象；线上只读报告图片地址
+    "primary": "/reports/primary_daily_progress.png", // 小学播报图路径
+    "middle": "/reports/middle_daily_progress.png", // 初中播报图路径
+    "high": "/reports/high_daily_progress.png", // 高中播报图路径
+    "lec1": "/reports/lec1_share.png" // lec内测小学量级播报图路径
+  },
+  "sync": {
+    "version": "1.0", // 必填；同步状态结构版本
+    "pending": false, // 默认值: false；是否存在待补偿同步
+    "lastError": null, // 默认值: null；最近同步错误
+    "attempts": 0 // 默认值: 0；当前队列重试次数
+  }
+}
+```
+
+### 5.2 Query result
+
+```jsonc
+{
+  "version": "1.0", // 必填；查询结果结构版本
+  "query": "6月27日YZY渠道的进量", // 必填；用户原始输入
+  "answer": "成单量 128，匹配 42 行", // 必填；用户可读答案
+  "metric": "成单量", // 默认值: 成单量；支持成单量、进量、目标
+  "conditions": { // 必填；解释系统实际使用的过滤条件集合
+    "condition_001": {
+      "version": "1.0", // 必填；条件结构版本
+      "field": "下单日期", // 必填；实际字段名
+      "operator": "=", // 必填；V1 默认等值匹配
+      "value": "2026-06-27" // 必填；规范化后的值
+    }
+  },
+  "clarification": {
+    "version": "1.0", // 必填；澄清结构版本
+    "rounds": 1, // 默认值: 0；最多 2
+    "awaiting": false // 默认值: false；是否等待用户补充
+  },
+  "rows": {}, // 必填；匹配明细集合，分页展示但导出全量
+  "pagination": {
+    "version": "1.0", // 必填；分页结构版本
+    "page": 1, // 默认值: 1；当前页
+    "pageSize": 10, // 默认值: 10；允许 10、20、50
+    "totalPages": 5 // 必填；总页数
+  }
+}
+```
+
+数据模型的核心取舍：以文件和 payload 作为单机事实源，避免数据库带来的部署和迁移成本；用版本字段保护未来结构演进；不把前端筛选状态持久化，因为当前核心任务是每日生成和交付，不是长期个人工作台。
+
+## 第六章：技术架构
+
+### 6.1 分层架构
+
+```text
++--------------------------------------------------------------------------------+
+| 浏览器层：静态 HTML/CSS/JS，负责筛选、分页、导出当前视图、触发 reload 和播报       |
++--------------------------------------------------------------------------------+
+| 本地 HTTP 服务层：app.py，负责 API、文件下载、健康检查、钉钉发送、线上同步队列     |
++--------------------------------------------------------------------------------+
+| 计算层：build_summary.py，负责字段校验、聚合、渠道归属、日期进度、状态基础数据     |
++--------------------------------------------------------------------------------+
+| 输出层：build_workbook.mjs、build_daily_report_images.py、export_daily_report... |
+| 负责 Excel、HTML、PNG 等最终交付物                                               |
++--------------------------------------------------------------------------------+
+| 文件层：tongji_demo.xlsx、tongji_target.xlsx、outputs、reports、state、config     |
++--------------------------------------------------------------------------------+
+| 线上只读层：发布后的静态资源和状态接口，只服务展示与下载，不作为主写入端           |
++--------------------------------------------------------------------------------+
+```
+
+### 6.2 依赖表
+
+| 库名 | 用途 | 为何优于替代方案 | 大致包体积 |
+|---|---|---|---|
+| Python 标准库 http.server | 本地 API 服务和文件下载 | 已满足单用户本地服务，不引入 Web 框架配置 | 随 Python 提供 |
+| Pandas | 读取 Excel、聚合、日期处理、输出表格 | 当前指标高度表格化，Pandas 能直接表达 groupby、merge、日期归一化 | 未知 |
+| Node.js 运行时 | 运行工作簿和图片导出脚本 | 项目已有 runtime，适合驱动浏览器导出和文件生成 | 未知 |
+| Playwright | 将播报 HTML 导出为 PNG | 能用浏览器真实渲染保证图片与 HTML 一致 | 未知 |
+| 原生浏览器 JavaScript | 前端筛选、查询状态、CSV 导出 | 当前交互不需要构建系统，减少部署复杂度 | 随浏览器提供 |
+
+### 6.3 最大架构风险
+
+最大风险是产品继续增加输出形式后，指标口径被复制到多个文件。应对方式是把 `build_summary.py` 和 `summary_payload.json` 作为唯一指标边界，新增输出必须从 Summary 消费数据，并在测试中验证页面、工作簿、播报图和接口的同名字段一致。
+
+### 6.4 可替换技术原则
+
+推荐默认保持 Python 本地 HTTP 服务、Pandas、静态前端和文件式状态。如果后续项目已经迁移到 FastAPI、Flask、DuckDB、SQLite、React 或 Vite，可以替换外层服务和前端组织方式；不可变的是：输入 Excel 字段口径、Summary 唯一事实源、学部期次日期一致性校验、输出链路同步生成、缺配置不报成功、自然语言查询不静默猜测。
+
+## 第七章：交互细节
+
+### 7.1 键盘快捷键
+
+| 操作 | 快捷键 | 备注 |
+|---|---|---|
+| 聚焦自然语言查询输入框 | `/` | 仅当当前焦点不在输入框内时生效；若未实现则不影响 P0 |
+| 提交自然语言查询 | Enter | 输入框内提交 |
+| 关闭自然语言查询面板 | Esc | 返回进度监控，不清空已有结果 |
+| 表格筛选关键词清空 | Esc | 焦点在关键词框内且有内容时清空 |
+
+### 7.2 右键菜单与上下文菜单
+
+当前 V1 不要求自定义右键菜单，浏览器默认菜单即可。若后续实现，建议只在明细行上提供上下文菜单：
+
+```text
+明细行右键菜单
++-- 复制该行
++-- 复制渠道 + 价体
++-- 按该学部筛选
++-- 按该渠道筛选
++-- 导出当前筛选
+```
+
+硬约束：右键菜单不得成为唯一操作入口，同样能力必须能通过显式按钮或筛选控件完成。
+
+### 7.3 空状态
+
+| 视图 | 触发条件 | 用户看到的内容 | CTA |
+|---|---|---|---|
+| 首次无上传记录 | upload metadata 为空 | demo 或 target 显示 `尚未上传` | 上传今日 demo、更新 target |
+| 筛选无结果 | 当前筛选没有匹配行 | 当前筛选汇总显示 0 条，表格为空 | 修改筛选条件 |
+| 查询无结果 | 查询条件完整但匹配 0 行 | 答案为 0，匹配行数为 0 | 重新提问 |
+| 线上同步无 token | 缺同步 token | 显示线上未同步或待补偿原因 | 配置 token 后 retry |
+| 播报图不存在 | 首次下载或源文件更新后图片缺失 | 按钮请求后等待生成 | 生成成功后打开图片 |
+
+### 7.4 错误状态
+
+| 触发条件 | 用户可见的提示信息 | 恢复操作 |
+|---|---|---|
+| demo 缺必填字段 | `demo 缺少必要字段: custom_uid` | 修正 Excel 字段后重新上传 |
+| target 缺必填字段 | `target 缺少必要字段: target_time` | 修正 target 后重新上传 |
+| 同学部同一期次日期冲突 | `target 中同学部、同一期次的target_time不一致: 小学/暑_10` | 统一 target 日期后重算 |
+| 自然语言查询多义 | `匹配到多个渠道，请确认具体值` | 用户回答一个明确值 |
+| 钉钉缺配置 | `缺少 DINGTALK_WEBHOOK，无法发送播报` | 配置环境变量后重试 |
+
+### 7.5 加载状态
+
+- GET `/api/state`：若 200ms 内未返回，显示页面级读取状态；超过 3000ms 显示“仍在生成或读取数据”。
+- POST `/api/reload-demo` 和 `/api/reload-target`：立即禁用对应按钮；超过 500ms 显示处理中；超过 30000ms 给出重算耗时提醒但不取消请求。
+- POST `/api/query`：超过 200ms 显示查询中；超过 5000ms 提示检查源文件体量。
+- 下载播报图：浏览器新标签处理；若 HEAD 或 GET 失败，前端展示 toast。
+- 钉钉播报：发送期间禁用对应按钮；超过 10000ms 显示网络或公网图片地址检查提示。
+
+## 第八章：导出与输出系统
+
+### 8.1 支持的输出格式
+
+| 格式 | 使用场景 | 质量选项 | 备注 |
+|---|---|---|---|
+| CSV 最新期次 | 运营复核当天核心明细 | UTF-8，保留列名 | 来源为 latestSummary |
+| CSV 完整 Summary | 历史期次分析或排查 | UTF-8，保留列名 | 来源为 full summary |
+| CSV 当前视图 | 按筛选条件导出跟进清单 | 文件顶部包含当前筛选汇总 | 前端从当前行集合生成 |
+| CSV 查询明细 | 自然语言查询结果留痕 | 导出全部匹配行，不只当前页 | 来源为 query_result.csv |
+| XLSX 工作簿 | 交付给习惯 Excel 的用户 | 单一当前工作簿 | 路径为 `outputs/tongji_summary/tongji_summary_current.xlsx` |
+| PNG 播报图 | 群播报和图片转发 | 固定宽度视觉输出 | 小学、初中、高中、lec内测小学量级 |
+| HTML 播报源 | 视觉排查和图片生成中间件 | 浏览器真实渲染 | 不作为用户主要交付格式 |
+| JSON state | 线上只读看板和接口消费 | UTF-8 JSON | `/api/state` |
+
+### 8.2 输出文件结构
+
+```text
+outputs/
++-- tongji_summary/
+|   +-- summary_payload.json
+|   +-- tongji_summary_current.csv
+|   +-- tongji_summary_current.xlsx
+|   +-- query_result.csv
+|   +-- upload_metadata.json
+|   +-- metadata.csv
+reports/
++-- daily_progress/
+|   +-- primary_daily_progress.html
+|   +-- primary_daily_progress.png
+|   +-- middle_daily_progress.html
+|   +-- middle_daily_progress.png
+|   +-- high_daily_progress.html
+|   +-- high_daily_progress.png
+|   +-- lec1_share.html
+|   +-- lec1_share.png
+|   +-- manifest.json
+state/
++-- sync_queue.json
+```
+
+### 8.3 播报图字段口径
+
+- 范围：仅各学部 target 表最新期次；历史期次和 demo-only 新期次不进入播报图。
+- 渠道展示：线索渠道二级分类加格式化后的价体。
+- 招生目标：目标合计。
+- 成单量：现状合计。
+- 招生进度：成单量除招生目标。
+- 进度GAP：时间进度减招生进度，两个进度都按页面口径限制在 0% 到 100%，保留正负号。
+- 剩余天数：与进度使用同一计算结果，目标日及以后为 0；目标日前为 `max(6 - 当前进度阶段, 1)`，当前进度阶段等于进度乘 6。
+- 状态：与看板状态分类一致。
+- 年级排序：小学二至六年级、初中初一至初三、高中高一至高三。
+- lec内测小学量级：固定统计小学、LEC内测、1 元、target 中该范围最新期次；YZY 4400、WC 1800、RQ 1000、JJ 1000；目标占比固定为 54%、22%、12%、12%；实际占比按 1 元价体成单量计算。
+
+### 8.4 钉钉输出规则
+
+- 使用自定义机器人 webhook。
+- 消息必须包含关键词 `成单`。
+- 图片 URL 必须能被钉钉客户端访问。
+- 优先使用 `DINGTALK_REPORT_BASE_URL` 指向可访问的本地或公网服务。
+- 如需先上传图片，使用 `REPORT_IMAGE_UPLOAD_URL` 和 `REPORT_UPLOAD_TOKEN`。
+- 缺任意必要配置时返回明确本地错误，不发送伪成功状态。
+
+## 第九章：开发优先级
+
+### 实现顺序建议
+
+先锁定 Summary 计算和回归测试，再接入页面状态与导出，最后处理播报、线上同步和自然语言查询。这样能让每个输出都围绕同一份可验证数据扩展。
+
+### P0
+
+最小可用版本必须完成固定 Excel 读取、字段校验、Summary 统一计算、最新期次默认看板、筛选明细、CSV 与 XLSX 导出、四张播报图生成、下载入口、钉钉配置校验、健康检查和能证明核心口径的自动化测试。
+
+### P1
+
+完善线上只读同步、失败补偿队列、当前视图导出包含筛选汇总、自然语言查询澄清流程、别名表解析、查询明细分页和导出。
+
+### P2
+
+增强运营效率：播报前预览、公网图片 URL 检查、同步失败原因面板、查询结果转筛选、更多错误报告下载。
+
+### P3
+
+探索长期能力：历史上传记录、趋势图、页面内编辑 target、权限账号、多用户共享或更丰富的数据问答；这些能力必须在不破坏 Summary 唯一事实源的前提下推进。
+
+## 第十章：性能指标
+
+| 指标 | 目标值 | 测量方法 | 降级阈值 |
+|---|---:|---|---:|
+| 健康检查响应时间 | 小于等于 300ms | 本机请求 `GET /api/health`，记录总耗时 | 大于 1000ms |
+| 页面 state 加载时间 | 小于等于 1200ms | 本机请求 `GET /api/state`，payload 已存在时测量 | 大于 3000ms |
+| demo 或 target 重算总耗时 | 小于等于 30000ms | 点击 reload 后到 JSON 返回，包含 Summary、工作簿、播报图生成 | 大于 60000ms |
+| Summary 行数一致性 | 100% 一致 | 比较 payload、CSV、XLSX 中关键列行数和合计 | 任一不一致 |
+| 最新期次概览一致性 | 100% 一致 | 小学、初中、高中分别比较输入日期、明细唯一进度和顶部进度 | 任一学部不一致 |
+| 查询提交响应时间 | 小于等于 2000ms | 运行典型查询 `6月27日YZY渠道的进量` | 大于 5000ms |
+| 播报图文件存在率 | 4/4 | reload 后检查四个 PNG 路径存在且文件大小大于 10KB | 少于 4 个或任一小于等于 10KB |
+| 钉钉 payload 可验证性 | 100% | mock webhook 或 payload 构造测试，检查包含关键词和图片 URL | 缺关键词或 URL |
+| 前端筛选更新时间 | 小于等于 150ms | 在 5000 行以内数据上更改筛选条件并测量 render | 大于 500ms |
+| 自动化测试通过率 | 100% | 运行相关 unittest 测试文件 | 任一相关测试失败 |
+
+## 第十一章：开发者交接说明
+
+### a) 你应先构建什么
+
+你应先保护 Summary 统一计算链路，再处理 UI 和输出。任何功能如果需要目标、现状、完成率、进度、剩余天数或状态，必须先确认它读取的是统一 Summary，而不是在前端、工作簿或播报图里重新算一遍。
+
+### b) 你不能重新解释的规则
+
+- 不要把当前日期、下单日期、进量日期和 target_time 混为一个字段。
+- 不要把学部级当前日期按渠道、价体或年级分别取值。
+- 不要在同学部同一期次 target_time 或进量日期冲突时静默选择最大值或最小值。
+- 不要让目标为 0 的行计入落后项。
+- 不要让钉钉发送在缺配置或失败时显示成功。
+- 不要把自然语言查询的多义匹配静默选第一个。
+
+### c) 你可以自由优化的地方
+
+- 页面视觉层级、表格密度、按钮分组、错误文案和空状态。
+- 播报图排版、字体、对齐、颜色和适合转发的细节。
+- 代码文件组织，只要输入输出路径、API 行为和指标口径不变。
+- 查询示例、解释视图和分页体验。
+
+### d) 已知的未知项
+
+- 此处未解决：是否需要支持浏览器上传任意命名 Excel，而不只是读取固定根目录文件。
+- 此处未解决：钉钉正式发送时图片地址是否必须走公网上传服务，取决于实际群客户端访问环境。
+- 此处未解决：默认明细 chip 应固定为 `快` 还是 `最新期次`，需要以当前用户日常操作偏好确认。
+- 此处未解决：历史上传记录、趋势图和账号权限是否进入下一版本。
+
+### e) 验收剧本
+
+验收剧本 1：重算与健康检查
+
+```bash
+python3 outputs/tongji_summary/build_summary.py
+python3 -m unittest tests/test_summary_progress.py
+python3 -m unittest tests/test_server_runtime.py
+curl -s http://127.0.0.1:8766/api/health
+```
+
+成功标志：Summary 输出文件存在；测试通过；健康接口返回 capabilities，包含 health、reload-demo、reload-target、online-sync。
+
+验收剧本 2：三学部进度一致性
+
+```bash
+python3 -m unittest tests/test_summary_progress.py tests/test_daily_report_images.py
+```
+
+成功标志：小学、初中、高中的当前日期、明细唯一进度、顶部进度使用同一计算结果；target_time 和进量日期冲突测试能阻止生成。
+
+验收剧本 3：播报图输出
+
+```bash
+python3 reports/build_daily_report_images.py
+node reports/export_daily_report_images.mjs
+ls -lh reports/daily_progress/primary_daily_progress.png reports/daily_progress/middle_daily_progress.png reports/daily_progress/high_daily_progress.png reports/daily_progress/lec1_share.png
+```
+
+成功标志：四张 PNG 均存在，文件大小大于 10KB，manifest 指向当前生成路径。
+
+验收剧本 4：自然语言查询
+
+```bash
+python3 -m unittest tests/test_natural_query.py
+```
+
+成功标志：缺日期时只问一个条件；别名、last_from、大小写和空格归一化可用；多义渠道不静默选择；查询结果可导出。
+
+验收剧本 5：线上只读和同步补偿
+
+```bash
+python3 -m unittest tests/test_netlify_readonly.py tests/test_publish_netlify.py tests/test_server_runtime.py
+```
+
+成功标志：线上只读资源路径存在；缺 token 时同步可跳过并提示；失败同步会写入队列，retry 成功后 pending 变为 false。

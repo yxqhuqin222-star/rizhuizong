@@ -35,14 +35,13 @@ GRADE_ORDER = {
     "高三": 3,
 }
 LEC1_CHANNELS = [
-    ("YZY", "out_wxst_wxstqt_1774944753086", 2900, 0.49),
-    ("WC", "out_wxst_wxstqt_1774944782661", 1000, 0.17),
-    ("RQ", "out_wxst_wxstqt_1774945025540", 1000, 0.17),
-    ("JJ", "out_wxst_wxstqt_1774945094967", 1000, 0.17),
-    ("SH9.9", "out_wxst_wxstqt_1774944710158", 600, 1.00),
+    ("YZY", "out_wxst_wxstqt_1774944753086", 4400, 0.54),
+    ("WC", "out_wxst_wxstqt_1774944782661", 1800, 0.22),
+    ("RQ", "out_wxst_wxstqt_1774945025540", 1000, 0.12),
+    ("JJ", "out_wxst_wxstqt_1774945094967", 1000, 0.12),
 ]
-LEC1_PAYMENT_VALUES = [100, 990]
-LEC1_PAYMENT_LABEL = "1元+9.9元"
+LEC1_PAYMENT_VALUES = [100]
+LEC1_PAYMENT_LABEL = "1元"
 
 
 def term_key(value):
@@ -293,13 +292,26 @@ def table_html(title, rows, columns):
     """
 
 
-LEC1_TERM = "暑_11"
+LEC1_DEPARTMENT = "小学"
+LEC1_CHANNEL = "LEC内测"
 
 
 def latest_target_term(df):
     target_basis = df[df["target_time"].notna()]
     terms = sorted(target_basis["期次"].dropna().unique(), key=term_key)
     return terms[-1] if terms else None
+
+
+def latest_lec1_term(target):
+    target_data = target.copy()
+    target_data["线索渠道二级分类"] = target_data["线索渠道二级分类"].map(normalize_report_channel)
+    target_data["价体"] = pd.to_numeric(target_data["价体"], errors="coerce")
+    scoped = target_data[
+        target_data["学部"].eq(LEC1_DEPARTMENT)
+        & target_data["线索渠道二级分类"].eq(LEC1_CHANNEL)
+        & target_data["价体"].isin(LEC1_PAYMENT_VALUES)
+    ]
+    return latest_target_term(scoped)
 
 
 def normalize_report_channel(value):
@@ -327,7 +339,11 @@ def assign_summary_channel(row, exact_target_keys, fallback_channels):
     return channel
 
 
-def filter_lec1_data(demo, target):
+def filter_lec1_data(demo, target, term=None):
+    term = term or latest_lec1_term(target)
+    if term is None:
+        return demo.iloc[0:0].copy()
+
     data = demo.copy()
     data["下单日期"] = pd.to_datetime(data["下单日期"], errors="coerce").dt.normalize()
 
@@ -346,9 +362,9 @@ def filter_lec1_data(demo, target):
         axis=1,
     )
     return data[
-        data["学部"].eq("小学")
-        & data["期次"].eq(LEC1_TERM)
-        & data["归属后渠道"].eq("LEC内测")
+        data["学部"].eq(LEC1_DEPARTMENT)
+        & data["期次"].eq(term)
+        & data["归属后渠道"].eq(LEC1_CHANNEL)
         & pd.to_numeric(data["价体"], errors="coerce").isin(LEC1_PAYMENT_VALUES)
     ].copy()
 
@@ -374,19 +390,15 @@ def lec1_channel_count(data, last_from, payment_values):
 def lec1_actual_shares(data):
     one_yuan_counts = [
         lec1_channel_count(data, last_from, [100])
-        for _name, last_from, _target_volume, _target_share in LEC1_CHANNELS[:4]
+        for _name, last_from, _target_volume, _target_share in LEC1_CHANNELS
     ]
     one_yuan_total = sum(one_yuan_counts)
-    shares = [count / one_yuan_total if one_yuan_total else 0 for count in one_yuan_counts]
-
-    sh_last_from = LEC1_CHANNELS[4][1]
-    sh_count = lec1_channel_count(data, sh_last_from, [990])
-    shares.append(1 if sh_count else 0)
-    return shares
+    return [count / one_yuan_total if one_yuan_total else 0 for count in one_yuan_counts]
 
 
 def render_lec1_share(demo, target):
-    data = filter_lec1_data(demo, target)
+    term = latest_lec1_term(target)
+    data = filter_lec1_data(demo, target, term)
     counts = lec1_channel_counts(data)
     intake_total = sum(counts)
     target_volumes = [target_volume for _name, _last_from, target_volume, _target_share in LEC1_CHANNELS]
@@ -436,7 +448,7 @@ def render_lec1_share(demo, target):
     <header>
       <div>
         <h1>{html.escape(title)}</h1>
-        <p>范围：小学 · {html.escape(LEC1_TERM)} · LEC内测 · {html.escape(LEC1_PAYMENT_LABEL)} · 同进度表口径 · 生成日期：{pd.Timestamp.today().strftime("%Y-%m-%d")}</p>
+        <p>范围：{html.escape(LEC1_DEPARTMENT)} · {html.escape(str(term))} · {html.escape(LEC1_CHANNEL)} · {html.escape(LEC1_PAYMENT_LABEL)} · 同进度表口径 · 生成日期：{pd.Timestamp.today().strftime("%Y-%m-%d")}</p>
       </div>
       <div class="metrics">
         <div><span>报量合计</span><b>{int_text(target_total)}</b></div>
@@ -458,11 +470,11 @@ def render_lec1_share(demo, target):
     html_path.write_text(html_text, encoding="utf-8")
     return {
         "dept": "lec1",
-        "term": LEC1_TERM,
+        "term": term,
         "html": str(html_path),
         "png": str(OUT_DIR / "lec1_share.png"),
         "summary": {
-            "范围": f"小学 {LEC1_TERM} LEC内测 {LEC1_PAYMENT_LABEL} 同进度表口径",
+            "范围": f"{LEC1_DEPARTMENT} {term} {LEC1_CHANNEL} {LEC1_PAYMENT_LABEL} 同进度表口径",
             "报量": str(target_total),
             "进量": str(intake_total),
             "渠道进量": "；".join(f"{name}={int_text(count)}" for name, count in zip(names, counts)),

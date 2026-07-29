@@ -57,6 +57,84 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertIn(("自拼", "暑_12"), set(zip(detail_latest["学部"], detail_latest["期次"])))
         self.assertNotIn(("自拼", "暑_11"), set(zip(detail_latest["学部"], detail_latest["期次"])))
 
+    def test_summary_sorts_grade_before_payment_within_same_channel(self):
+        demo = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_1",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 990,
+                    "年级": "初二",
+                    "custom_uid": "u2",
+                    "成单量": 1,
+                    "下单日期": "2026-07-26",
+                    "last_from": "source-a",
+                },
+                {
+                    "学部": "初中",
+                    "期次": "秋_1",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 990,
+                    "年级": "初三",
+                    "custom_uid": "u3",
+                    "成单量": 1,
+                    "下单日期": "2026-07-26",
+                    "last_from": "source-a",
+                },
+                {
+                    "学部": "初中",
+                    "期次": "秋_1",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 1880,
+                    "年级": "初一",
+                    "custom_uid": "u1",
+                    "成单量": 1,
+                    "下单日期": "2026-07-26",
+                    "last_from": "source-a",
+                },
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_1",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 990,
+                    "年级": "初二",
+                    "目标": 100,
+                    "target_time": "2026-07-28",
+                    "进量日期": "2026-07-26",
+                },
+                {
+                    "学部": "初中",
+                    "期次": "秋_1",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 990,
+                    "年级": "初三",
+                    "目标": 100,
+                    "target_time": "2026-07-28",
+                    "进量日期": "2026-07-26",
+                },
+                {
+                    "学部": "初中",
+                    "期次": "秋_1",
+                    "线索渠道二级分类": "LEC内测",
+                    "价体": 1880,
+                    "年级": "初一",
+                    "目标": 100,
+                    "target_time": "2026-07-28",
+                    "进量日期": "2026-07-26",
+                },
+            ]
+        )
+
+        summary, _current_summary, _target_summary = build_summary.build_summary(demo, target)
+
+        self.assertEqual(summary["年级"].tolist(), ["初一", "初二", "初三"])
+        self.assertEqual(summary["价体"].tolist(), [1880, 990, 990])
+
     def test_counts_distinct_custom_uid_within_each_summary_dimension(self):
         demo = pd.DataFrame(
             [
