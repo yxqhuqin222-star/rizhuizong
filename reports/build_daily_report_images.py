@@ -9,7 +9,7 @@ import pandas as pd
 
 
 ROOT = Path("/Users/kityhello/workplace/project/rizhuizong")
-SUMMARY_PATH = ROOT / "outputs" / "tongji_summary" / "tongji_summary_current.xlsx"
+SUMMARY_PATH = ROOT / "outputs" / "tongji_summary" / "tongji_summary_current.csv"
 DEMO_PATH = ROOT / "tongji_demo.xlsx"
 TARGET_PATH = ROOT / "tongji_target.xlsx"
 OUT_DIR = ROOT / "reports" / "daily_progress"
@@ -132,6 +132,15 @@ def normalize_summary_frame(df):
     for col in ["下单日期", "target_time", "进量日期"]:
         data[col] = pd.to_datetime(data[col], errors="coerce")
     return data
+
+
+def payment_as_number(value):
+    if pd.isna(value):
+        return pd.NA
+    numeric = pd.to_numeric(value, errors="coerce")
+    if pd.isna(numeric):
+        return pd.NA
+    return float(numeric)
 
 
 def enrich(df):
@@ -314,6 +323,17 @@ def latest_lec1_term(target):
     return latest_target_term(scoped)
 
 
+def lec1_summary_scope(summary, term):
+    data = summary.copy()
+    data["价体"] = data["价体"].map(payment_as_number)
+    return data[
+        data["学部"].eq(LEC1_DEPARTMENT)
+        & data["期次"].eq(term)
+        & data["线索渠道二级分类"].eq(LEC1_CHANNEL)
+        & data["价体"].isin([value / 100 for value in LEC1_PAYMENT_VALUES])
+    ].copy()
+
+
 def normalize_report_channel(value):
     if isinstance(value, str) and value.startswith("外部微转-"):
         return "外部微转-*"
@@ -387,25 +407,33 @@ def lec1_channel_count(data, last_from, payment_values):
     return len(set(keys))
 
 
-def lec1_actual_shares(data):
+def lec1_actual_shares(data, total=None):
     one_yuan_counts = [
         lec1_channel_count(data, last_from, [100])
         for _name, last_from, _target_volume, _target_share in LEC1_CHANNELS
     ]
-    one_yuan_total = sum(one_yuan_counts)
-    return [count / one_yuan_total if one_yuan_total else 0 for count in one_yuan_counts]
+    denominator = sum(one_yuan_counts) if total is None else total
+    return [count / denominator if denominator else 0 for count in one_yuan_counts]
 
 
-def render_lec1_share(demo, target):
+def render_lec1_share(demo, target, summary):
     term = latest_lec1_term(target)
     data = filter_lec1_data(demo, target, term)
+    summary_scope = lec1_summary_scope(summary, term)
     counts = lec1_channel_counts(data)
-    intake_total = sum(counts)
     target_volumes = [target_volume for _name, _last_from, target_volume, _target_share in LEC1_CHANNELS]
-    target_total = sum(target_volumes)
-    target_shares = [target_share for _name, _last_from, _target_volume, target_share in LEC1_CHANNELS]
-    actual_shares = lec1_actual_shares(data)
+    target_total = int(summary_scope["目标"].sum())
+    intake_total = int(summary_scope["现状"].sum())
+    other_target = target_total - sum(target_volumes)
+    other_count = intake_total - sum(counts)
+    if other_target or other_count:
+        target_volumes.append(other_target)
+        counts.append(other_count)
+    target_shares = [target_volume / target_total if target_total else 0 for target_volume in target_volumes]
+    actual_shares = [count / intake_total if intake_total else 0 for count in counts]
     names = [name for name, _last_from, _target_volume, _target_share in LEC1_CHANNELS]
+    if len(counts) > len(names):
+        names.append("其他")
 
     def cells(values, formatter, extra_class=""):
         rendered = []
@@ -548,7 +576,7 @@ def render_department(dept, df):
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "report.css").write_text(CSS, encoding="utf-8")
-    df = normalize_summary_frame(pd.read_excel(SUMMARY_PATH, sheet_name="目标现状对比", header=1))
+    df = normalize_summary_frame(pd.read_csv(SUMMARY_PATH))
     demo = pd.read_excel(DEMO_PATH, sheet_name="rizhuizong_city (17)")
     target = pd.read_excel(TARGET_PATH, sheet_name="Sheet1")
     outputs = []
@@ -559,7 +587,7 @@ def main():
         output = render_department(dept, dept_df)
         if output:
             outputs.append(output)
-    lec1_output = render_lec1_share(demo, target)
+    lec1_output = render_lec1_share(demo, target, df)
     if lec1_output:
         outputs.append(lec1_output)
     (OUT_DIR / "manifest.json").write_text(json.dumps(outputs, ensure_ascii=False, indent=2), encoding="utf-8")
