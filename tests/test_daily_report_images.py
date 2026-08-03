@@ -79,13 +79,16 @@ class Lec1ChannelsTest(unittest.TestCase):
         self.assertEqual(
             LEC1_CHANNELS,
             [
-                ("YZY", "out_wxst_wxstqt_1774944753086", 4400, 0.54),
-                ("WC", "out_wxst_wxstqt_1774944782661", 1800, 0.22),
-                ("RQ", "out_wxst_wxstqt_1774945025540", 1000, 0.12),
-                ("JJ", "out_wxst_wxstqt_1774945094967", 1000, 0.12),
+                ("YZY", "out_wxst_wxstqt_1774944753086", 3800, 0.43),
+                ("WC", "out_wxst_wxstqt_1774944782661", 1600, 0.18),
+                ("RQ", "out_wxst_wxstqt_1774945025540", 1300, 0.15),
+                ("JJ", "out_wxst_wxstqt_1774945094967", 500, 0.06),
+                ("SH", "out_wxst_wxstqt_1774944710158", 1000, 0.11),
+                ("ZXC", "out_wxst_wxstqt_1781763514315", 600, 0.07),
             ],
         )
-        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 8200)
+        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 8800)
+        self.assertEqual(sum(channel[3] for channel in LEC1_CHANNELS), 1)
 
     def test_scope_matches_progress_summary_without_intake_cutoff(self):
         demo = pd.DataFrame(
@@ -225,7 +228,7 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         shares = lec1_actual_shares(data)
 
-        self.assertEqual(shares, [2 / 3, 0, 1 / 3, 0])
+        self.assertEqual(shares, [2 / 3, 0, 1 / 3, 0, 0, 0])
 
     def test_render_lec1_share_uses_summary_total_and_keeps_other_channel(self):
         demo = pd.DataFrame(
@@ -260,7 +263,7 @@ class Lec1ChannelsTest(unittest.TestCase):
                     "线索渠道二级分类": "LEC内测",
                     "价体": 100,
                     "年级": "三年级",
-                    "目标": 8200,
+                    "目标": 8800,
                     "target_time": "2026-07-29",
                     "进量日期": "2026-07-23",
                 },
@@ -277,9 +280,9 @@ class Lec1ChannelsTest(unittest.TestCase):
                     "下单日期": "2026-07-09",
                     "target_time": "2026-07-29",
                     "进量日期": "2026-07-23",
-                    "目标": 8200,
+                    "目标": 8800,
                     "现状": 2,
-                    "完成率": 2 / 8200,
+                    "完成率": 2 / 8800,
                     "进度": 0.5,
                 },
             ]
@@ -291,7 +294,7 @@ class Lec1ChannelsTest(unittest.TestCase):
         ):
             output = render_lec1_share(demo, target, summary)
 
-        self.assertEqual(output["summary"]["报量"], "8200")
+        self.assertEqual(output["summary"]["报量"], "8800")
         self.assertEqual(output["summary"]["进量"], "2")
         self.assertIn("YZY=1", output["summary"]["渠道进量"])
         self.assertIn("其他=1", output["summary"]["渠道进量"])

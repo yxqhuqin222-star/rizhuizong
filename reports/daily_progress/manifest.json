@@ -1,14 +1,14 @@
 [
   {
     "dept": "小学",
-    "term": "暑_12",
+    "term": "暑_13",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.png",
     "summary": {
-      "目标": "12170",
-      "成单量": "9635",
-      "完成率": "0.7917009038619556",
-      "平均进度": "0.8333333333333334"
+      "目标": "11650",
+      "成单量": "7085",
+      "完成率": "0.6081545064377682",
+      "平均进度": "0.6666666666666666"
     }
   },
   {
@@ -18,34 +18,34 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.png",
     "summary": {
       "目标": "8110",
-      "成单量": "2",
-      "完成率": "0.0002466091245376079",
-      "平均进度": "0.0"
+      "成单量": "6149",
+      "完成率": "0.7581997533908754",
+      "平均进度": "0.8333333333333334"
     }
   },
   {
     "dept": "高中",
-    "term": "暑_15",
+    "term": "暑_16",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.png",
     "summary": {
-      "目标": "7105",
-      "成单量": "6784",
-      "完成率": "0.9548205489092189",
-      "平均进度": "0.8333333333333336"
+      "目标": "7025",
+      "成单量": "4701",
+      "完成率": "0.6691814946619217",
+      "平均进度": "0.6666666666666665"
     }
   },
   {
     "dept": "lec1",
-    "term": "暑_12",
+    "term": "暑_13",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.png",
     "summary": {
-      "范围": "小学 暑_12 LEC内测 1元 同进度表口径",
-      "报量": "8200",
-      "进量": "6765",
-      "渠道进量": "YZY=3,419；WC=1,202；RQ=1,390；JJ=399；其他=355",
-      "实际占比": "YZY=51%；WC=18%；RQ=21%；JJ=6%；其他=5%"
+      "范围": "小学 暑_13 LEC内测 1元 同进度表口径",
+      "报量": "8800",
+      "进量": "5572",
+      "渠道进量": "YZY=2,129；WC=695；RQ=1,366；JJ=106；SH=1,276；ZXC=0",
+      "实际占比": "YZY=38%；WC=12%；RQ=25%；JJ=2%；SH=23%；ZXC=0%"
     }
   }
 ]

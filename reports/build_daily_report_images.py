@@ -35,10 +35,12 @@ GRADE_ORDER = {
     "高三": 3,
 }
 LEC1_CHANNELS = [
-    ("YZY", "out_wxst_wxstqt_1774944753086", 4400, 0.54),
-    ("WC", "out_wxst_wxstqt_1774944782661", 1800, 0.22),
-    ("RQ", "out_wxst_wxstqt_1774945025540", 1000, 0.12),
-    ("JJ", "out_wxst_wxstqt_1774945094967", 1000, 0.12),
+    ("YZY", "out_wxst_wxstqt_1774944753086", 3800, 0.43),
+    ("WC", "out_wxst_wxstqt_1774944782661", 1600, 0.18),
+    ("RQ", "out_wxst_wxstqt_1774945025540", 1300, 0.15),
+    ("JJ", "out_wxst_wxstqt_1774945094967", 500, 0.06),
+    ("SH", "out_wxst_wxstqt_1774944710158", 1000, 0.11),
+    ("ZXC", "out_wxst_wxstqt_1781763514315", 600, 0.07),
 ]
 LEC1_PAYMENT_VALUES = [100]
 LEC1_PAYMENT_LABEL = "1元"

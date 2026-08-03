@@ -57,7 +57,7 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertIn(("自拼", "暑_12"), set(zip(detail_latest["学部"], detail_latest["期次"])))
         self.assertNotIn(("自拼", "暑_11"), set(zip(detail_latest["学部"], detail_latest["期次"])))
 
-    def test_summary_sorts_grade_before_payment_within_same_channel(self):
+    def test_summary_sorts_payment_before_grade_within_same_channel(self):
         demo = pd.DataFrame(
             [
                 {
@@ -132,8 +132,8 @@ class SummaryProgressTest(unittest.TestCase):
 
         summary, _current_summary, _target_summary = build_summary.build_summary(demo, target)
 
-        self.assertEqual(summary["年级"].tolist(), ["初一", "初二", "初三"])
-        self.assertEqual(summary["价体"].tolist(), [1880, 990, 990])
+        self.assertEqual(summary["价体"].tolist(), [990, 990, 1880])
+        self.assertEqual(summary["年级"].tolist(), ["初二", "初三", "初一"])
 
     def test_counts_distinct_custom_uid_within_each_summary_dimension(self):
         demo = pd.DataFrame(
