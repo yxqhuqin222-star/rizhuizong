@@ -35,15 +35,18 @@ GRADE_ORDER = {
     "高三": 3,
 }
 LEC1_CHANNELS = [
-    ("YZY", "out_wxst_wxstqt_1774944753086", 3800, 0.43),
-    ("WC", "out_wxst_wxstqt_1774944782661", 1600, 0.18),
-    ("RQ", "out_wxst_wxstqt_1774945025540", 1300, 0.15),
-    ("JJ", "out_wxst_wxstqt_1774945094967", 500, 0.06),
-    ("SH", "out_wxst_wxstqt_1774944710158", 1000, 0.11),
-    ("ZXC", "out_wxst_wxstqt_1781763514315", 600, 0.07),
+    ("YZY", "out_wxst_wxstqt_1774944753086", 2500, 0.45, [100]),
+    ("WC", "out_wxst_wxstqt_1774944782661", 500, 0.09, [100]),
+    ("RQ（9.9+1）", "out_wxst_wxstqt_1774945025540", 500, 0.09, [100, 990]),
+    ("JJ", "out_wxst_wxstqt_1774945094967", 300, 0.05, [100]),
+    ("SH", "out_wxst_wxstqt_1774944710158", 200, 0.04, [100]),
+    ("ZXC", "out_wxst_wxstqt_1781763514315", 300, 0.05, [100]),
+    ("ZH（9）", "out_wxst_wxstqt_1781763613827", 1000, 0.18, [900]),
 ]
-LEC1_PAYMENT_VALUES = [100]
-LEC1_PAYMENT_LABEL = "1元"
+LEC1_OTHER_NAME = "外部微转"
+LEC1_OTHER_TARGET_VOLUME = 200
+LEC1_PAYMENT_VALUES = sorted({value for *_prefix, values in LEC1_CHANNELS for value in values})
+LEC1_PAYMENT_LABEL = "1元/9元/9.9元"
 
 
 def term_key(value):
@@ -393,8 +396,8 @@ def filter_lec1_data(demo, target, term=None):
 
 def lec1_channel_counts(data):
     return [
-        lec1_channel_count(data, last_from, LEC1_PAYMENT_VALUES)
-        for _name, last_from, _target_volume, _target_share in LEC1_CHANNELS
+        lec1_channel_count(data, last_from, payment_values)
+        for _name, last_from, _target_volume, _target_share, payment_values in LEC1_CHANNELS
     ]
 
 
@@ -410,12 +413,12 @@ def lec1_channel_count(data, last_from, payment_values):
 
 
 def lec1_actual_shares(data, total=None):
-    one_yuan_counts = [
-        lec1_channel_count(data, last_from, [100])
-        for _name, last_from, _target_volume, _target_share in LEC1_CHANNELS
+    counts = [
+        lec1_channel_count(data, last_from, payment_values)
+        for _name, last_from, _target_volume, _target_share, payment_values in LEC1_CHANNELS
     ]
-    denominator = sum(one_yuan_counts) if total is None else total
-    return [count / denominator if denominator else 0 for count in one_yuan_counts]
+    denominator = sum(counts) if total is None else total
+    return [count / denominator if denominator else 0 for count in counts]
 
 
 def render_lec1_share(demo, target, summary):
@@ -423,19 +426,21 @@ def render_lec1_share(demo, target, summary):
     data = filter_lec1_data(demo, target, term)
     summary_scope = lec1_summary_scope(summary, term)
     counts = lec1_channel_counts(data)
-    target_volumes = [target_volume for _name, _last_from, target_volume, _target_share in LEC1_CHANNELS]
-    target_total = int(summary_scope["目标"].sum())
+    target_volumes = [
+        target_volume for _name, _last_from, target_volume, _target_share, _payment_values in LEC1_CHANNELS
+    ]
     intake_total = int(summary_scope["现状"].sum())
-    other_target = target_total - sum(target_volumes)
+    other_target = LEC1_OTHER_TARGET_VOLUME
+    target_total = sum(target_volumes) + other_target
     other_count = intake_total - sum(counts)
     if other_target or other_count:
         target_volumes.append(other_target)
         counts.append(other_count)
     target_shares = [target_volume / target_total if target_total else 0 for target_volume in target_volumes]
     actual_shares = [count / intake_total if intake_total else 0 for count in counts]
-    names = [name for name, _last_from, _target_volume, _target_share in LEC1_CHANNELS]
+    names = [name for name, _last_from, _target_volume, _target_share, _payment_values in LEC1_CHANNELS]
     if len(counts) > len(names):
-        names.append("其他")
+        names.append(LEC1_OTHER_NAME)
 
     def cells(values, formatter, extra_class=""):
         rendered = []
@@ -443,7 +448,7 @@ def render_lec1_share(demo, target, summary):
             classes = []
             if extra_class:
                 classes.append(extra_class)
-            if names[index] == "RQ":
+            if names[index].startswith("RQ"):
                 classes.append("highlight")
             class_attr = f' class="{" ".join(classes)}"' if classes else ""
             rendered.append(f"<td{class_attr}>{formatter(value)}</td>")

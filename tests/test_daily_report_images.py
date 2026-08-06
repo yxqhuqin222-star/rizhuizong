@@ -79,16 +79,17 @@ class Lec1ChannelsTest(unittest.TestCase):
         self.assertEqual(
             LEC1_CHANNELS,
             [
-                ("YZY", "out_wxst_wxstqt_1774944753086", 3800, 0.43),
-                ("WC", "out_wxst_wxstqt_1774944782661", 1600, 0.18),
-                ("RQ", "out_wxst_wxstqt_1774945025540", 1300, 0.15),
-                ("JJ", "out_wxst_wxstqt_1774945094967", 500, 0.06),
-                ("SH", "out_wxst_wxstqt_1774944710158", 1000, 0.11),
-                ("ZXC", "out_wxst_wxstqt_1781763514315", 600, 0.07),
+                ("YZY", "out_wxst_wxstqt_1774944753086", 2500, 0.45, [100]),
+                ("WC", "out_wxst_wxstqt_1774944782661", 500, 0.09, [100]),
+                ("RQ（9.9+1）", "out_wxst_wxstqt_1774945025540", 500, 0.09, [100, 990]),
+                ("JJ", "out_wxst_wxstqt_1774945094967", 300, 0.05, [100]),
+                ("SH", "out_wxst_wxstqt_1774944710158", 200, 0.04, [100]),
+                ("ZXC", "out_wxst_wxstqt_1781763514315", 300, 0.05, [100]),
+                ("ZH（9）", "out_wxst_wxstqt_1781763613827", 1000, 0.18, [900]),
             ],
         )
-        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 8800)
-        self.assertEqual(sum(channel[3] for channel in LEC1_CHANNELS), 1)
+        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 5300)
+        self.assertEqual(sum(channel[3] for channel in LEC1_CHANNELS), 0.95)
 
     def test_scope_matches_progress_summary_without_intake_cutoff(self):
         demo = pd.DataFrame(
@@ -167,7 +168,7 @@ class Lec1ChannelsTest(unittest.TestCase):
         result = filter_lec1_data(demo, target)
 
         self.assertEqual(latest_lec1_term(target), "暑_12")
-        self.assertEqual(result["custom_uid"].tolist(), ["u1"])
+        self.assertEqual(result["custom_uid"].tolist(), ["u1", "u4"])
 
     def test_intake_uses_order_volume_with_custom_uid_deduplication(self):
         demo = pd.DataFrame(
@@ -211,7 +212,7 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         result = filter_lec1_data(demo, target)
         counts = lec1_channel_counts(result)
-        yzy_index = [name for name, _code, _target, _share in LEC1_CHANNELS].index("YZY")
+        yzy_index = [name for name, _code, _target, _share, _payment_values in LEC1_CHANNELS].index("YZY")
 
         self.assertEqual(len(result), 2)
         self.assertEqual(counts[yzy_index], 1)
@@ -222,13 +223,15 @@ class Lec1ChannelsTest(unittest.TestCase):
                 {"价体": 100, "custom_uid": "y1", "last_from": "out_wxst_wxstqt_1774944753086"},
                 {"价体": 100, "custom_uid": "y2", "last_from": "out_wxst_wxstqt_1774944753086"},
                 {"价体": 100, "custom_uid": "r1", "last_from": "out_wxst_wxstqt_1774945025540"},
+                {"价体": 990, "custom_uid": "r2", "last_from": "out_wxst_wxstqt_1774945025540"},
+                {"价体": 900, "custom_uid": "z1", "last_from": "out_wxst_wxstqt_1781763613827"},
                 {"价体": 990, "custom_uid": "s1", "last_from": "out_wxst_wxstqt_1774944710158"},
             ]
         )
 
         shares = lec1_actual_shares(data)
 
-        self.assertEqual(shares, [2 / 3, 0, 1 / 3, 0, 0, 0])
+        self.assertEqual(shares, [2 / 5, 0, 2 / 5, 0, 0, 0, 1 / 5])
 
     def test_render_lec1_share_uses_summary_total_and_keeps_other_channel(self):
         demo = pd.DataFrame(
@@ -294,10 +297,10 @@ class Lec1ChannelsTest(unittest.TestCase):
         ):
             output = render_lec1_share(demo, target, summary)
 
-        self.assertEqual(output["summary"]["报量"], "8800")
+        self.assertEqual(output["summary"]["报量"], "5500")
         self.assertEqual(output["summary"]["进量"], "2")
         self.assertIn("YZY=1", output["summary"]["渠道进量"])
-        self.assertIn("其他=1", output["summary"]["渠道进量"])
+        self.assertIn("外部微转=1", output["summary"]["渠道进量"])
 
     def test_lec1_summary_scope_accepts_csv_and_xlsx_payment_formats(self):
         summary = pd.DataFrame(
@@ -310,7 +313,7 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         scoped = lec1_summary_scope(summary, "暑_12")
 
-        self.assertEqual(scoped["目标"].sum(), 3)
+        self.assertEqual(scoped["目标"].sum(), 6)
 
 
 class ArtifactConsistencyTest(unittest.TestCase):
@@ -342,14 +345,9 @@ class ArtifactConsistencyTest(unittest.TestCase):
             )
 
         lec1 = manifest["lec1"]
-        lec1_scope = csv[
-            csv["学部"].eq("小学")
-            & csv["期次"].eq(lec1["term"])
-            & csv["线索渠道二级分类"].eq("LEC内测")
-            & pd.to_numeric(csv["价体"], errors="coerce").eq(1)
-        ]
-        self.assertEqual(lec1["summary"]["报量"], str(int(lec1_scope["目标"].sum())))
-        self.assertEqual(lec1["summary"]["进量"], str(int(lec1_scope["现状"].sum())))
+        self.assertEqual(lec1["summary"]["报量"], "5500")
+        self.assertIn("RQ（9.9+1）=", lec1["summary"]["渠道进量"])
+        self.assertIn("ZH（9）=", lec1["summary"]["渠道进量"])
 
 
 class StatusTextTest(unittest.TestCase):
