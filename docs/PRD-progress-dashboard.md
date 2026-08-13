@@ -208,6 +208,7 @@ outputs/tongji_summary/build_summary.py
     v
 reports/build_daily_report_images.py
     |
+    +-- writes overall_progress.png
     +-- writes primary_daily_progress.png
     +-- writes middle_daily_progress.png
     +-- writes high_daily_progress.png
@@ -431,6 +432,7 @@ POST /api/query
 ```text
 +--------------------------------------------+
 | 播报交付                                   |
+| 按钮：下载总进度图    按钮：播报总进度到钉钉 |
 | 按钮：下载小学播报图  按钮：播报小学到钉钉 |
 | 按钮：下载初中播报图  按钮：播报初中到钉钉 |
 | 按钮：下载高中播报图  按钮：播报高中到钉钉 |
@@ -627,6 +629,7 @@ POST /api/broadcast-report
     }
   },
   "reportUrls": { // 默认值: 空对象；线上只读报告图片地址
+    "overall": "/reports/overall_progress.png", // 总进度播报图路径
     "primary": "/reports/primary_daily_progress.png", // 小学播报图路径
     "middle": "/reports/middle_daily_progress.png", // 初中播报图路径
     "high": "/reports/high_daily_progress.png", // 高中播报图路径
@@ -795,6 +798,8 @@ outputs/
 |   +-- metadata.csv
 reports/
 +-- daily_progress/
+|   +-- overall_progress.html
+|   +-- overall_progress.png
 |   +-- primary_daily_progress.html
 |   +-- primary_daily_progress.png
 |   +-- middle_daily_progress.html
@@ -819,7 +824,7 @@ state/
 - 剩余天数：与进度使用同一计算结果，目标日及以后为 0；目标日前为 `max(6 - 当前进度阶段, 1)`，当前进度阶段等于进度乘 6。
 - 状态：与看板状态分类一致。
 - 年级排序：小学二至六年级、初中初一至初三、高中高一至高三。
-- lec内测小学量级：固定统计小学、LEC内测、1 元、target 中该范围最新期次；报量合计和进量合计必须来自统一 Summary；渠道报量与目标占比为 YZY 3800（43%）、WC 1600（18%）、RQ 1300（15%）、JJ 500（6%）、SH 1000（11%）、ZXC 600（7%），合计 8800（100%）；六个指定 `last_from` 外的 Summary 进量差额列为“其他”；实际占比按 Summary 进量合计计算。
+- lec内测小学量级：固定统计小学、LEC内测、1 元/9 元/9.9 元、target 中该范围最新期次；渠道报量与目标占比为 YZY 2500（45%）、WC 500（9%）、RQ（9.9+1）500（9%）、JJ 300（5%）、SH 200（4%）、ZXC 300（5%）、ZH（9）1000（18%）、外部微转 200（4%），合计 5500（100%）；RQ 进量统计 1 元和 9.9 元价体的总单量，ZH 进量统计 9 元价体单量；外部微转进量只统计原始 `线索渠道二级分类` 以 `外部微转-` 开头的单量，不用 Summary 进量差额倒推；未被指定渠道规则计入、且不属于真实外部微转的剩余进量单独列为“未配置”，报量按 0 展示，不计入报量合计；实际占比按 Summary 中 1 元/9 元/9.9 元进量合计计算。
 
 ### 8.4 钉钉输出规则
 
@@ -922,10 +927,10 @@ python3 -m unittest tests/test_summary_progress.py tests/test_daily_report_image
 ```bash
 python3 reports/build_daily_report_images.py
 node reports/export_daily_report_images.mjs
-ls -lh reports/daily_progress/primary_daily_progress.png reports/daily_progress/middle_daily_progress.png reports/daily_progress/high_daily_progress.png reports/daily_progress/lec1_share.png
+ls -lh reports/daily_progress/overall_progress.png reports/daily_progress/primary_daily_progress.png reports/daily_progress/middle_daily_progress.png reports/daily_progress/high_daily_progress.png reports/daily_progress/lec1_share.png
 ```
 
-成功标志：四张 PNG 均存在，文件大小大于 10KB，manifest 指向当前生成路径。
+成功标志：五张 PNG 均存在，文件大小大于 10KB，manifest 指向当前生成路径。
 
 验收剧本 4：自然语言查询
 

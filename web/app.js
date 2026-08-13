@@ -57,6 +57,7 @@ function syncStatusText(sync) {
 function openReport(dept) {
   if (readOnlyMode) {
     const reportFiles = {
+      overall: "/reports/overall_progress.png",
       primary: "/reports/primary_daily_progress.png",
       middle: "/reports/middle_daily_progress.png",
       high: "/reports/high_daily_progress.png",
@@ -605,7 +606,7 @@ async function loadNaturalQueryPage(page) {
 }
 
 async function broadcastReport(dept) {
-  const labels = { primary: "小学", middle: "初中", high: "高中", lec1: "1元占比" };
+  const labels = { overall: "总进度", primary: "小学", middle: "初中", high: "高中", lec1: "1元占比" };
   toast(`正在播报${labels[dept]}图片到钉钉...`);
   try {
     const result = await requestJson("/api/broadcast-report", {
@@ -627,6 +628,7 @@ function bindEvents() {
       "targetUploadButton",
       "naturalQueryButton",
       "exportQuery",
+      "broadcastOverall",
       "broadcastPrimary",
       "broadcastMiddle",
       "broadcastHigh",
@@ -709,10 +711,12 @@ function bindEvents() {
     location.href = `${apiBase}/download/query`;
   });
   document.getElementById("reportPrimary").addEventListener("click", () => openReport("primary"));
+  document.getElementById("reportOverall").addEventListener("click", () => openReport("overall"));
   document.getElementById("reportMiddle").addEventListener("click", () => openReport("middle"));
   document.getElementById("reportHigh").addEventListener("click", () => openReport("high"));
   document.getElementById("reportLec1").addEventListener("click", () => openReport("lec1"));
   document.getElementById("broadcastPrimary").addEventListener("click", () => broadcastReport("primary"));
+  document.getElementById("broadcastOverall").addEventListener("click", () => broadcastReport("overall"));
   document.getElementById("broadcastMiddle").addEventListener("click", () => broadcastReport("middle"));
   document.getElementById("broadcastHigh").addEventListener("click", () => broadcastReport("high"));
   document.getElementById("broadcastLec1").addEventListener("click", () => broadcastReport("lec1"));

@@ -15,6 +15,7 @@ TARGET_PATH = ROOT / "tongji_target.xlsx"
 OUT_DIR = ROOT / "reports" / "daily_progress"
 TOTAL_DAYS = 6
 DEPARTMENTS = ["小学", "初中", "高中"]
+DEPARTMENT_FILE_SLUGS = {"小学": "primary", "初中": "middle", "高中": "high"}
 TERM_SEASON_ORDER = {
     "春": 1,
     "暑": 2,
@@ -35,15 +36,20 @@ GRADE_ORDER = {
     "高三": 3,
 }
 LEC1_CHANNELS = [
-    ("YZY", "out_wxst_wxstqt_1774944753086", 3800, 0.43),
-    ("WC", "out_wxst_wxstqt_1774944782661", 1600, 0.18),
-    ("RQ", "out_wxst_wxstqt_1774945025540", 1300, 0.15),
-    ("JJ", "out_wxst_wxstqt_1774945094967", 500, 0.06),
-    ("SH", "out_wxst_wxstqt_1774944710158", 1000, 0.11),
-    ("ZXC", "out_wxst_wxstqt_1781763514315", 600, 0.07),
+    ("YZY", "out_wxst_wxstqt_1774944753086", 2500, 0.45, [100]),
+    ("WC", "out_wxst_wxstqt_1774944782661", 500, 0.09, [100]),
+    ("RQ（9.9+1）", "out_wxst_wxstqt_1774945025540", 500, 0.09, [100, 990]),
+    ("JJ", "out_wxst_wxstqt_1774945094967", 300, 0.05, [100]),
+    ("SH", "out_wxst_wxstqt_1774944710158", 200, 0.04, [100]),
+    ("ZXC", "out_wxst_wxstqt_1781763514315", 300, 0.05, [100]),
+    ("ZH（9）", "out_wxst_wxstqt_1781763613827", 1000, 0.18, [900]),
 ]
-LEC1_PAYMENT_VALUES = [100]
-LEC1_PAYMENT_LABEL = "1元"
+LEC1_OTHER_NAME = "外部微转"
+LEC1_OTHER_TARGET_VOLUME = 200
+LEC1_UNCONFIGURED_NAME = "未配置"
+LEC1_UNCONFIGURED_TARGET_VOLUME = 0
+LEC1_PAYMENT_VALUES = sorted({value for *_prefix, values in LEC1_CHANNELS for value in values})
+LEC1_PAYMENT_LABEL = "1元/9元/9.9元"
 
 
 def term_key(value):
@@ -69,6 +75,12 @@ def pct_text(value):
     if value is None:
         return "--"
     return f"{value * 100:.0f}%"
+
+
+def percent_text(value, digits=0):
+    if pd.isna(value):
+        return "--"
+    return f"{float(value) * 100:.{digits}f}%"
 
 
 def signed_pct_text(value):
@@ -393,8 +405,8 @@ def filter_lec1_data(demo, target, term=None):
 
 def lec1_channel_counts(data):
     return [
-        lec1_channel_count(data, last_from, LEC1_PAYMENT_VALUES)
-        for _name, last_from, _target_volume, _target_share in LEC1_CHANNELS
+        lec1_channel_count(data, last_from, payment_values)
+        for _name, last_from, _target_volume, _target_share, payment_values in LEC1_CHANNELS
     ]
 
 
@@ -402,6 +414,10 @@ def lec1_channel_count(data, last_from, payment_values):
     scoped = data[data["last_from"].astype(str).eq(last_from)].copy()
     scoped["价体"] = pd.to_numeric(scoped["价体"], errors="coerce")
     scoped = scoped[scoped["价体"].isin(payment_values)]
+    return lec1_count_rows(scoped)
+
+
+def lec1_count_rows(scoped):
     keys = [
         ("custom_uid", value) if pd.notna(value) else ("missing_row", position)
         for position, value in enumerate(scoped["custom_uid"])
@@ -409,13 +425,20 @@ def lec1_channel_count(data, last_from, payment_values):
     return len(set(keys))
 
 
-def lec1_actual_shares(data, total=None):
-    one_yuan_counts = [
-        lec1_channel_count(data, last_from, [100])
-        for _name, last_from, _target_volume, _target_share in LEC1_CHANNELS
+def lec1_external_count(data):
+    scoped = data[
+        data["线索渠道二级分类"].astype(str).str.startswith("外部微转-", na=False)
     ]
-    denominator = sum(one_yuan_counts) if total is None else total
-    return [count / denominator if denominator else 0 for count in one_yuan_counts]
+    return lec1_count_rows(scoped)
+
+
+def lec1_actual_shares(data, total=None):
+    counts = [
+        lec1_channel_count(data, last_from, payment_values)
+        for _name, last_from, _target_volume, _target_share, payment_values in LEC1_CHANNELS
+    ]
+    denominator = sum(counts) if total is None else total
+    return [count / denominator if denominator else 0 for count in counts]
 
 
 def render_lec1_share(demo, target, summary):
@@ -423,19 +446,28 @@ def render_lec1_share(demo, target, summary):
     data = filter_lec1_data(demo, target, term)
     summary_scope = lec1_summary_scope(summary, term)
     counts = lec1_channel_counts(data)
-    target_volumes = [target_volume for _name, _last_from, target_volume, _target_share in LEC1_CHANNELS]
-    target_total = int(summary_scope["目标"].sum())
+    target_volumes = [
+        target_volume for _name, _last_from, target_volume, _target_share, _payment_values in LEC1_CHANNELS
+    ]
     intake_total = int(summary_scope["现状"].sum())
-    other_target = target_total - sum(target_volumes)
-    other_count = intake_total - sum(counts)
+    other_target = LEC1_OTHER_TARGET_VOLUME
+    unconfigured_target = LEC1_UNCONFIGURED_TARGET_VOLUME
+    target_total = sum(target_volumes) + other_target + unconfigured_target
+    other_count = lec1_external_count(data)
+    unconfigured_count = intake_total - sum(counts) - other_count
     if other_target or other_count:
         target_volumes.append(other_target)
         counts.append(other_count)
+    if unconfigured_target or unconfigured_count:
+        target_volumes.append(unconfigured_target)
+        counts.append(unconfigured_count)
     target_shares = [target_volume / target_total if target_total else 0 for target_volume in target_volumes]
     actual_shares = [count / intake_total if intake_total else 0 for count in counts]
-    names = [name for name, _last_from, _target_volume, _target_share in LEC1_CHANNELS]
+    names = [name for name, _last_from, _target_volume, _target_share, _payment_values in LEC1_CHANNELS]
+    if len(counts) > len(names) and (other_target or other_count):
+        names.append(LEC1_OTHER_NAME)
     if len(counts) > len(names):
-        names.append("其他")
+        names.append(LEC1_UNCONFIGURED_NAME)
 
     def cells(values, formatter, extra_class=""):
         rendered = []
@@ -443,7 +475,7 @@ def render_lec1_share(demo, target, summary):
             classes = []
             if extra_class:
                 classes.append(extra_class)
-            if names[index] == "RQ":
+            if names[index].startswith("RQ"):
                 classes.append("highlight")
             class_attr = f' class="{" ".join(classes)}"' if classes else ""
             rendered.append(f"<td{class_attr}>{formatter(value)}</td>")
@@ -560,7 +592,7 @@ def render_department(dept, df):
 </body>
 </html>
 """
-    file_slug = {"小学": "primary", "初中": "middle", "高中": "high"}[dept]
+    file_slug = DEPARTMENT_FILE_SLUGS[dept]
     html_path = OUT_DIR / f"{file_slug}_daily_progress.html"
     html_path.write_text(html_text, encoding="utf-8")
     def summary_value(value):
@@ -572,6 +604,86 @@ def render_department(dept, df):
         "html": str(html_path),
         "png": str(OUT_DIR / f"{file_slug}_daily_progress.png"),
         "summary": {key: summary_value(value) for key, value in summary.items()},
+    }
+
+
+def render_overall_progress(df):
+    rows = []
+    for dept in DEPARTMENTS:
+        dept_df = df[df["学部"].eq(dept)].copy()
+        latest = latest_target_term(dept_df)
+        if latest is None:
+            continue
+        latest_df = dept_df[dept_df["期次"].eq(latest)]
+        target = latest_df["目标"].sum()
+        current = latest_df["现状"].sum()
+        completion = current / target if target else pd.NA
+        progress_values = latest_df["进度"].dropna()
+        progress = progress_values.mean() if not progress_values.empty else pd.NA
+        rows.append(
+            {
+                "学部": dept,
+                "最新期次目标": target,
+                "最新期次现状": current,
+                "完成率": completion,
+                "平均进度": progress,
+            }
+        )
+
+    title = "总进度播报"
+    date_text = pd.Timestamp.today().strftime("%Y-%m-%d")
+    headers = "".join(f"<th>{html.escape(col)}</th>" for col in ["学部", "最新期次目标", "最新期次现状", "完成率", "平均进度"])
+    body = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(row['学部']))}</td>"
+        f"<td class=\"num\">{int_text(row['最新期次目标'])}</td>"
+        f"<td class=\"num\">{int_text(row['最新期次现状'])}</td>"
+        f"<td class=\"num red\">{percent_text(row['完成率'], 1)}</td>"
+        f"<td class=\"num\">{pct_text(row['平均进度'])}</td>"
+        "</tr>"
+        for row in rows
+    )
+    html_text = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>{html.escape(title)}</title>
+  <link rel="stylesheet" href="report.css">
+</head>
+<body>
+  <main class="report overall-report">
+    <header>
+      <div>
+        <h1>{html.escape(title)}</h1>
+        <p>范围：小学、初中、高中各自最新 target 期次 · 生成日期：{date_text}</p>
+      </div>
+    </header>
+    <section class="card overall-card">
+      <table class="overall-table">
+        <thead><tr>{headers}</tr></thead>
+        <tbody>{body}</tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
+"""
+    html_path = OUT_DIR / "overall_progress.html"
+    html_path.write_text(html_text, encoding="utf-8")
+    return {
+        "dept": "overall",
+        "term": "各学部最新期次",
+        "html": str(html_path),
+        "png": str(OUT_DIR / "overall_progress.png"),
+        "summary": {
+            row["学部"]: (
+                f"目标={int_text(row['最新期次目标'])}；"
+                f"现状={int_text(row['最新期次现状'])}；"
+                f"完成率={percent_text(row['完成率'], 1)}；"
+                f"平均进度={pct_text(row['平均进度'])}"
+            )
+            for row in rows
+        },
     }
 
 
@@ -589,6 +701,9 @@ def main():
         output = render_department(dept, dept_df)
         if output:
             outputs.append(output)
+    overall_output = render_overall_progress(df)
+    if overall_output:
+        outputs.append(overall_output)
     lec1_output = render_lec1_share(demo, target, df)
     if lec1_output:
         outputs.append(lec1_output)
@@ -770,6 +885,55 @@ tbody tr:last-child td {
 .status.normal {
   background: #f1f5f9;
   color: #475569;
+}
+
+.red {
+  color: #b9443e;
+}
+
+.overall-report {
+  width: 1168px;
+  padding: 12px;
+}
+
+.overall-report header {
+  margin-bottom: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.overall-card {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.overall-table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 26px;
+}
+
+.overall-table th,
+.overall-table td {
+  height: 58px;
+  padding: 0 16px;
+  border: 1px solid #d9e1ea;
+  background: #fff;
+  font-weight: 700;
+}
+
+.overall-table thead th {
+  height: 40px;
+  background: #f8fafc;
+  color: #42526b;
+  font-size: 13px;
+}
+
+.overall-table tbody tr:nth-child(even) td {
+  background: #fff;
 }
 
 .lec1-report {

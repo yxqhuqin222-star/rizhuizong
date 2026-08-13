@@ -37,18 +37,21 @@ REPORT_SCRIPT = ROOT / "reports" / "build_daily_report_images.py"
 REPORT_EXPORT_SCRIPT = ROOT / "reports" / "export_daily_report_images.mjs"
 REPORT_DIR = ROOT / "reports" / "daily_progress"
 REPORT_FILES = {
+    "overall": REPORT_DIR / "overall_progress.png",
     "primary": REPORT_DIR / "primary_daily_progress.png",
     "middle": REPORT_DIR / "middle_daily_progress.png",
     "high": REPORT_DIR / "high_daily_progress.png",
     "lec1": REPORT_DIR / "lec1_share.png",
 }
 REPORT_LABELS = {
+    "overall": "总进度",
     "primary": "小学",
     "middle": "初中",
     "high": "高中",
     "lec1": "lec内测小学量级",
 }
 STATIC_REPORT_URLS = {
+    "overall": "/reports/overall_progress.png",
     "primary": "/reports/primary_daily_progress.png",
     "middle": "/reports/middle_daily_progress.png",
     "high": "/reports/high_daily_progress.png",

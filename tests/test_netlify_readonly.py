@@ -28,6 +28,10 @@ class NetlifyReadonlyBuildTests(unittest.TestCase):
         self.assertEqual(static_state, state)
         self.assertIn("latest", state["metrics"])
         self.assertEqual(
+            state["reportUrls"]["overall"],
+            "/reports/overall_progress.png",
+        )
+        self.assertEqual(
             state["reportUrls"]["primary"],
             "/reports/primary_daily_progress.png",
         )
@@ -35,6 +39,7 @@ class NetlifyReadonlyBuildTests(unittest.TestCase):
         self.assertTrue((public / "downloads" / "tongji_summary_current.xlsx").is_file())
 
         for name in (
+            "overall_progress.png",
             "primary_daily_progress.png",
             "middle_daily_progress.png",
             "high_daily_progress.png",

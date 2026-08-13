@@ -12,12 +12,14 @@ from reports.build_daily_report_images import (
     filter_lec1_data,
     lec1_actual_shares,
     lec1_channel_counts,
+    lec1_external_count,
     lec1_summary_scope,
     latest_lec1_term,
     latest_target_term,
     progress_gap,
     remaining_days,
     render_lec1_share,
+    render_overall_progress,
     render_rows,
     status_text,
     term_key,
@@ -79,16 +81,17 @@ class Lec1ChannelsTest(unittest.TestCase):
         self.assertEqual(
             LEC1_CHANNELS,
             [
-                ("YZY", "out_wxst_wxstqt_1774944753086", 3800, 0.43),
-                ("WC", "out_wxst_wxstqt_1774944782661", 1600, 0.18),
-                ("RQ", "out_wxst_wxstqt_1774945025540", 1300, 0.15),
-                ("JJ", "out_wxst_wxstqt_1774945094967", 500, 0.06),
-                ("SH", "out_wxst_wxstqt_1774944710158", 1000, 0.11),
-                ("ZXC", "out_wxst_wxstqt_1781763514315", 600, 0.07),
+                ("YZY", "out_wxst_wxstqt_1774944753086", 2500, 0.45, [100]),
+                ("WC", "out_wxst_wxstqt_1774944782661", 500, 0.09, [100]),
+                ("RQ（9.9+1）", "out_wxst_wxstqt_1774945025540", 500, 0.09, [100, 990]),
+                ("JJ", "out_wxst_wxstqt_1774945094967", 300, 0.05, [100]),
+                ("SH", "out_wxst_wxstqt_1774944710158", 200, 0.04, [100]),
+                ("ZXC", "out_wxst_wxstqt_1781763514315", 300, 0.05, [100]),
+                ("ZH（9）", "out_wxst_wxstqt_1781763613827", 1000, 0.18, [900]),
             ],
         )
-        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 8800)
-        self.assertEqual(sum(channel[3] for channel in LEC1_CHANNELS), 1)
+        self.assertEqual(sum(channel[2] for channel in LEC1_CHANNELS), 5300)
+        self.assertEqual(sum(channel[3] for channel in LEC1_CHANNELS), 0.95)
 
     def test_scope_matches_progress_summary_without_intake_cutoff(self):
         demo = pd.DataFrame(
@@ -167,7 +170,7 @@ class Lec1ChannelsTest(unittest.TestCase):
         result = filter_lec1_data(demo, target)
 
         self.assertEqual(latest_lec1_term(target), "暑_12")
-        self.assertEqual(result["custom_uid"].tolist(), ["u1"])
+        self.assertEqual(result["custom_uid"].tolist(), ["u1", "u4"])
 
     def test_intake_uses_order_volume_with_custom_uid_deduplication(self):
         demo = pd.DataFrame(
@@ -211,7 +214,7 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         result = filter_lec1_data(demo, target)
         counts = lec1_channel_counts(result)
-        yzy_index = [name for name, _code, _target, _share in LEC1_CHANNELS].index("YZY")
+        yzy_index = [name for name, _code, _target, _share, _payment_values in LEC1_CHANNELS].index("YZY")
 
         self.assertEqual(len(result), 2)
         self.assertEqual(counts[yzy_index], 1)
@@ -222,15 +225,17 @@ class Lec1ChannelsTest(unittest.TestCase):
                 {"价体": 100, "custom_uid": "y1", "last_from": "out_wxst_wxstqt_1774944753086"},
                 {"价体": 100, "custom_uid": "y2", "last_from": "out_wxst_wxstqt_1774944753086"},
                 {"价体": 100, "custom_uid": "r1", "last_from": "out_wxst_wxstqt_1774945025540"},
+                {"价体": 990, "custom_uid": "r2", "last_from": "out_wxst_wxstqt_1774945025540"},
+                {"价体": 900, "custom_uid": "z1", "last_from": "out_wxst_wxstqt_1781763613827"},
                 {"价体": 990, "custom_uid": "s1", "last_from": "out_wxst_wxstqt_1774944710158"},
             ]
         )
 
         shares = lec1_actual_shares(data)
 
-        self.assertEqual(shares, [2 / 3, 0, 1 / 3, 0, 0, 0])
+        self.assertEqual(shares, [2 / 5, 0, 2 / 5, 0, 0, 0, 1 / 5])
 
-    def test_render_lec1_share_uses_summary_total_and_keeps_other_channel(self):
+    def test_render_lec1_share_uses_summary_total_and_counts_true_external_channel(self):
         demo = pd.DataFrame(
             [
                 {
@@ -252,6 +257,16 @@ class Lec1ChannelsTest(unittest.TestCase):
                     "下单日期": "2026-07-09",
                     "custom_uid": "other",
                     "last_from": "unlisted-source",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_12",
+                    "线索渠道二级分类": "外部微转-社群",
+                    "价体": 100,
+                    "年级": "三年级",
+                    "下单日期": "2026-07-09",
+                    "custom_uid": "external",
+                    "last_from": "external-source",
                 },
             ]
         )
@@ -281,8 +296,8 @@ class Lec1ChannelsTest(unittest.TestCase):
                     "target_time": "2026-07-29",
                     "进量日期": "2026-07-23",
                     "目标": 8800,
-                    "现状": 2,
-                    "完成率": 2 / 8800,
+                    "现状": 3,
+                    "完成率": 3 / 8800,
                     "进度": 0.5,
                 },
             ]
@@ -294,10 +309,22 @@ class Lec1ChannelsTest(unittest.TestCase):
         ):
             output = render_lec1_share(demo, target, summary)
 
-        self.assertEqual(output["summary"]["报量"], "8800")
-        self.assertEqual(output["summary"]["进量"], "2")
+        self.assertEqual(output["summary"]["报量"], "5500")
+        self.assertEqual(output["summary"]["进量"], "3")
         self.assertIn("YZY=1", output["summary"]["渠道进量"])
-        self.assertIn("其他=1", output["summary"]["渠道进量"])
+        self.assertIn("外部微转=1", output["summary"]["渠道进量"])
+        self.assertIn("未配置=1", output["summary"]["渠道进量"])
+
+    def test_lec1_external_count_uses_raw_external_microtransfer_only(self):
+        data = pd.DataFrame(
+            [
+                {"线索渠道二级分类": "外部微转-社群", "custom_uid": "e1"},
+                {"线索渠道二级分类": "外部微转-图书", "custom_uid": "e2"},
+                {"线索渠道二级分类": "LEC内测", "custom_uid": "unlisted"},
+            ]
+        )
+
+        self.assertEqual(lec1_external_count(data), 2)
 
     def test_lec1_summary_scope_accepts_csv_and_xlsx_payment_formats(self):
         summary = pd.DataFrame(
@@ -310,10 +337,32 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         scoped = lec1_summary_scope(summary, "暑_12")
 
-        self.assertEqual(scoped["目标"].sum(), 3)
+        self.assertEqual(scoped["目标"].sum(), 6)
 
 
 class ArtifactConsistencyTest(unittest.TestCase):
+    def test_render_overall_progress_uses_latest_department_metrics(self):
+        summary = pd.DataFrame(
+            [
+                {"学部": "小学", "期次": "暑_1", "target_time": "2026-07-01", "目标": 10, "现状": 8, "进度": 1},
+                {"学部": "小学", "期次": "暑_2", "target_time": "2026-07-08", "目标": 20, "现状": 25, "进度": 1},
+                {"学部": "初中", "期次": "秋_1", "target_time": "2026-08-01", "目标": 30, "现状": 10, "进度": 0.5},
+                {"学部": "高中", "期次": "秋_1", "target_time": "2026-08-01", "目标": 40, "现状": 20, "进度": 0.75},
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch(
+            "reports.build_daily_report_images.OUT_DIR",
+            Path(temp_dir),
+        ):
+            output = render_overall_progress(summary)
+
+        self.assertEqual(output["dept"], "overall")
+        self.assertIn("目标=20", output["summary"]["小学"])
+        self.assertIn("现状=25", output["summary"]["小学"])
+        self.assertIn("完成率=125.0%", output["summary"]["小学"])
+        self.assertIn("平均进度=100%", output["summary"]["小学"])
+
     def test_csv_xlsx_and_manifest_share_current_summary_metrics(self):
         csv = pd.read_csv(ROOT / "outputs/tongji_summary/tongji_summary_current.csv")
         xlsx = pd.read_excel(
@@ -327,6 +376,14 @@ class ArtifactConsistencyTest(unittest.TestCase):
         self.assertEqual(len(csv), len(xlsx))
         self.assertEqual(int(csv["目标"].sum()), int(xlsx["目标"].sum()))
         self.assertEqual(int(csv["现状"].sum()), int(xlsx["现状"].sum()))
+
+        overall = manifest["overall"]
+        for department in ["小学", "初中", "高中"]:
+            scoped = csv[csv["学部"].eq(department)]
+            term = latest_target_term(scoped)
+            latest = scoped[scoped["期次"].eq(term)]
+            self.assertIn(f"目标={int(latest['目标'].sum()):,}", overall["summary"][department])
+            self.assertIn(f"现状={int(latest['现状'].sum()):,}", overall["summary"][department])
 
         for dept in ["小学", "初中", "高中"]:
             item = manifest[dept]
@@ -342,14 +399,9 @@ class ArtifactConsistencyTest(unittest.TestCase):
             )
 
         lec1 = manifest["lec1"]
-        lec1_scope = csv[
-            csv["学部"].eq("小学")
-            & csv["期次"].eq(lec1["term"])
-            & csv["线索渠道二级分类"].eq("LEC内测")
-            & pd.to_numeric(csv["价体"], errors="coerce").eq(1)
-        ]
-        self.assertEqual(lec1["summary"]["报量"], str(int(lec1_scope["目标"].sum())))
-        self.assertEqual(lec1["summary"]["进量"], str(int(lec1_scope["现状"].sum())))
+        self.assertEqual(lec1["summary"]["报量"], "5500")
+        self.assertIn("RQ（9.9+1）=", lec1["summary"]["渠道进量"])
+        self.assertIn("ZH（9）=", lec1["summary"]["渠道进量"])
 
 
 class StatusTextTest(unittest.TestCase):

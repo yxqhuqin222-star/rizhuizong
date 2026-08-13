@@ -169,6 +169,7 @@ def validate_outputs() -> tuple[dict, dict[str, dict]]:
 
     required_files = (
         output_dir / "tongji_summary_current.xlsx",
+        report_dir / "overall_progress.png",
         report_dir / "primary_daily_progress.png",
         report_dir / "middle_daily_progress.png",
         report_dir / "high_daily_progress.png",
