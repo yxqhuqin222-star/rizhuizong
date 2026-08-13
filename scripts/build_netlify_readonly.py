@@ -70,6 +70,7 @@ def build():
             },
         },
         "reportUrls": {
+            "overall": "/reports/overall_progress.png",
             "primary": "/reports/primary_daily_progress.png",
             "middle": "/reports/middle_daily_progress.png",
             "high": "/reports/high_daily_progress.png",
@@ -92,6 +93,7 @@ def build():
     )
 
     report_names = (
+        "overall_progress.png",
         "primary_daily_progress.png",
         "middle_daily_progress.png",
         "high_daily_progress.png",

@@ -174,6 +174,55 @@ tbody tr:last-child td {
   color: #475569;
 }
 
+.red {
+  color: #b9443e;
+}
+
+.overall-report {
+  width: 1168px;
+  padding: 12px;
+}
+
+.overall-report header {
+  margin-bottom: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.overall-card {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.overall-table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 26px;
+}
+
+.overall-table th,
+.overall-table td {
+  height: 58px;
+  padding: 0 16px;
+  border: 1px solid #d9e1ea;
+  background: #fff;
+  font-weight: 700;
+}
+
+.overall-table thead th {
+  height: 40px;
+  background: #f8fafc;
+  color: #42526b;
+  font-size: 13px;
+}
+
+.overall-table tbody tr:nth-child(even) td {
+  background: #fff;
+}
+
 .lec1-report {
   width: 1272px;
   padding: 0;
