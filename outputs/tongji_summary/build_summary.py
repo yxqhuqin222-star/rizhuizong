@@ -188,6 +188,20 @@ def aggregate_current(df):
     )
 
 
+def aggregate_current_by_order_date(df):
+    data = df.copy()
+    data["线索渠道二级分类"] = data["线索渠道二级分类"].map(normalize_channel)
+    data["下单日期"] = pd.to_datetime(data["下单日期"], errors="coerce").dt.normalize()
+    data["_custom_uid_key"] = [
+        ("custom_uid", value) if pd.notna(value) else ("missing_row", position)
+        for position, value in enumerate(data["custom_uid"])
+    ]
+    return (
+        data.groupby(DIMENSIONS + ["下单日期"], dropna=False, as_index=False)
+        .agg(当日现状=("_custom_uid_key", "nunique"))
+    )
+
+
 def aggregate_target(df):
     data = df.copy()
     data["线索渠道二级分类"] = data["线索渠道二级分类"].map(normalize_channel)
@@ -232,21 +246,62 @@ def assign_unmatched_current_channels(current_summary, target_summary):
     )
 
 
+def assign_unmatched_daily_current_channels(daily_current_summary, target_summary):
+    target_channels = {}
+    exact_target_keys = set()
+    for row in target_summary[DIMENSIONS].itertuples(index=False, name=None):
+        exact_target_keys.add(row)
+        fallback_key = (row[0], row[1], row[3], row[4])
+        target_channels.setdefault(fallback_key, set()).add(row[2])
+
+    data = daily_current_summary.copy()
+    channel_index = data.columns.get_loc("线索渠道二级分类")
+    for index, row in enumerate(data[DIMENSIONS].itertuples(index=False, name=None)):
+        if row in exact_target_keys:
+            continue
+        if row[2] == "常规外呼":
+            continue
+        fallback_key = (row[0], row[1], row[3], row[4])
+        candidates = target_channels.get(fallback_key, set())
+        if len(candidates) == 1:
+            data.iat[index, channel_index] = next(iter(candidates))
+        elif len(candidates) > 1:
+            if "常规外呼" in candidates:
+                data.iat[index, channel_index] = "常规外呼"
+            elif "LEC内测" in candidates:
+                data.iat[index, channel_index] = "LEC内测"
+            else:
+                data.iat[index, channel_index] = "未报量"
+
+    return (
+        data.groupby(DIMENSIONS + ["下单日期"], dropna=False, as_index=False)
+        .agg(当日现状=("当日现状", "sum"))
+    )
+
+
 def build_summary(demo, target):
     validate_columns(demo, SUMMARY_DEMO_REQUIRED_COLUMNS, "demo")
     validate_columns(target, TARGET_REQUIRED_COLUMNS, "target")
     validate_department_term_dates(target)
     current_summary = aggregate_current(demo)
+    daily_current_summary = aggregate_current_by_order_date(demo)
     target_summary = aggregate_target(target)
     current_summary = assign_unmatched_current_channels(current_summary, target_summary)
+    daily_current_summary = assign_unmatched_daily_current_channels(daily_current_summary, target_summary)
 
     summary = (
         target_summary.merge(current_summary, on=DIMENSIONS, how="outer")
         .fillna({"目标": 0, "现状": 0})
     )
+    summary = summary.merge(
+        daily_current_summary,
+        on=DIMENSIONS + ["下单日期"],
+        how="left",
+    ).fillna({"当日现状": 0})
     summary = sort_summary_rows(summary)
     summary["目标"] = summary["目标"].astype(int)
     summary["现状"] = summary["现状"].astype(int)
+    summary["当日现状"] = summary["当日现状"].astype(int)
     summary["差距"] = summary["现状"] - summary["目标"]
     summary["完成率"] = summary.apply(
         lambda row: row["现状"] / row["目标"] if row["目标"] else pd.NA,
@@ -258,7 +313,7 @@ def build_summary(demo, target):
     summary["target_time"] = summary["target_time"].dt.strftime("%Y-%m-%d")
     summary["进量日期"] = summary["进量日期"].dt.strftime("%Y-%m-%d")
     summary = summary[
-        DIMENSIONS + ["下单日期", "target_time", "进量日期", "目标", "现状", "差距", "完成率", "进度"]
+        DIMENSIONS + ["下单日期", "target_time", "进量日期", "目标", "现状", "当日现状", "差距", "完成率", "进度"]
     ]
     return summary, current_summary, target_summary
 
@@ -398,6 +453,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["渠道归并规则", "线索渠道二级分类以“外部微转-”开头的值统一归为“外部微转-*”"],
             ["未命中渠道归属", "常规外呼未命中 target 时保留为仅现状项；其他渠道按同一学部、期次、价体、年级寻找 target 渠道，唯一候选直接归属，多个候选优先常规外呼、其次 LEC内测，两者都没有时归为未报量，无候选保留为仅现状项"],
             ["现状计算", "按学部、期次统计 demo 全量，不按 target 进量日期过滤；同一统计维度下按 custom_uid 去重计数，custom_uid 缺失的行分别计数"],
+            ["当日现状", "按学部、期次、渠道、价体、年级和下单日期统计当日 demo 去重量；前端选中下单日期时用于替换明细和当前筛选汇总的现状口径"],
             ["缺失值检查", "两个底表的指定维度字段及数值字段均无缺失"],
         ],
         columns=["指标", "值"],

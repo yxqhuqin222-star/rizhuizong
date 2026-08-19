@@ -103,6 +103,33 @@ class ServerRuntimeTest(unittest.TestCase):
             self.assertFalse(app.sync_queue_status()["pending"])
             self.assertEqual(app.sync_queue_status()["syncedAt"], "2026-07-19T10:00:00+08:00")
 
+    def test_successful_online_sync_uploads_synced_queue_status(self):
+        stale_sync = {"pending": True, "status": "failed", "lastError": "old refusal"}
+        uploaded_payloads = []
+
+        def fake_post(url, data, content_type):
+            uploaded_payloads.append((url, data, content_type))
+            return {"ok": True}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            (output_dir / "tongji_summary_current.xlsx").write_bytes(b"workbook")
+            with (
+                patch("app.OUTPUT_DIR", output_dir),
+                patch("app.REPORT_FILES", {}),
+                patch("app.DASHBOARD_SYNC_TOKEN", "token"),
+                patch("app.DASHBOARD_WORKBOOK_UPLOAD_URL", "https://example.com/workbook"),
+                patch("app.DASHBOARD_STATE_UPLOAD_URL", "https://example.com/state"),
+                patch("app.post_online_bytes", side_effect=fake_post),
+            ):
+                app.perform_online_sync({"summary": [], "sync": stale_sync})
+
+        state_payload = json.loads(uploaded_payloads[1][1].decode("utf-8"))
+        self.assertFalse(state_payload["sync"]["pending"])
+        self.assertEqual(state_payload["sync"]["status"], "synced")
+        self.assertIsNone(state_payload["sync"]["lastError"])
+        self.assertEqual(state_payload["sync"]["syncedAt"], state_payload["syncedAt"])
+
     def test_retry_sync_endpoint_returns_json(self):
         with patch("app.retry_pending_sync_once", return_value={"ok": True, "skipped": True}):
             status, payload = self.request_json("/api/retry-sync", method="POST")
