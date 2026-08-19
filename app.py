@@ -318,6 +318,18 @@ def sync_queue_status():
     }
 
 
+def synced_queue_status(synced_at):
+    return {
+        "pending": False,
+        "status": "synced",
+        "queuedAt": None,
+        "updatedAt": synced_at,
+        "syncedAt": synced_at,
+        "attempts": 0,
+        "lastError": None,
+    }
+
+
 def perform_online_sync(state):
     if not DASHBOARD_SYNC_TOKEN:
         raise ValueError("缺少 DASHBOARD_SYNC_TOKEN 或 REPORT_UPLOAD_TOKEN。")
@@ -331,6 +343,7 @@ def perform_online_sync(state):
     online_state = dict(state)
     online_state["reportUrls"] = report_urls
     online_state["syncedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    online_state["sync"] = synced_queue_status(online_state["syncedAt"])
 
     post_online_bytes(
         DASHBOARD_WORKBOOK_UPLOAD_URL,

@@ -612,14 +612,14 @@ main.query-mode > #summary {
   background: #fbfcfe;
 }
 
-.field label {
+.field > label {
   display: block;
   color: var(--muted);
   font-size: 11px;
   margin-bottom: 5px;
 }
 
-.field select, .field input {
+.field select, .field input, .multi-select-button {
   width: 100%;
   border: 1px solid var(--line);
   background-color: #fff;
@@ -631,7 +631,8 @@ main.query-mode > #summary {
   transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
 }
 
-.field select {
+.field select,
+.multi-select-button {
   appearance: none;
   padding-right: 30px;
   background-image:
@@ -644,21 +645,123 @@ main.query-mode > #summary {
   background-repeat: no-repeat;
 }
 
+.multi-select {
+  position: relative;
+}
+
+.multi-select-button {
+  display: block;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.multi-select-menu {
+  position: fixed;
+  z-index: 40;
+  width: min(280px, calc(100vw - 24px));
+  max-height: 280px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  line-height: 1.35;
+  color: #1d2b3a;
+  overscroll-behavior: contain;
+}
+
+.multi-select-actions {
+  display: flex;
+  gap: 6px;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid #edf1f5;
+  margin-bottom: 4px;
+}
+
+.multi-select-actions button {
+  flex: 1;
+  height: 28px;
+  border: 1px solid #d8e0ea;
+  border-radius: 6px;
+  background: #f7f9fc;
+  color: #314154;
+  cursor: pointer;
+}
+
+.multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #1d2b3a;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.multi-select-option:hover {
+  background: #f4f7fb;
+}
+
+.multi-select-option input[type="checkbox"] {
+  appearance: none;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid #9aa9ba;
+  border-radius: 4px;
+  background-color: #fff;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.multi-select-option input[type="checkbox"]:checked {
+  border-color: var(--blue);
+  background-color: var(--blue);
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9.8 3.2 5.1 8 2.2 5.2' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
+}
+
+.multi-select-option input[type="checkbox"]:focus-visible {
+  outline: 3px solid rgba(36, 84, 166, 0.16);
+  outline-offset: 2px;
+}
+
+.multi-select-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .field select:hover,
-.field input:hover {
+.field input:hover,
+.multi-select-button:hover {
   border-color: #c8d3df;
   background-color: #fbfdff;
 }
 
 .field select:focus,
-.field input:focus {
+.field input:focus,
+.multi-select-button:focus {
   outline: none;
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(36, 84, 166, 0.12);
 }
 
 .field select:disabled,
-.field input:disabled {
+.field input:disabled,
+.multi-select-button:disabled {
   background-color: #f3f6f9;
   color: #98a4b3;
   cursor: not-allowed;

@@ -229,29 +229,178 @@ function uniqueOptions(rows, key) {
     .sort((a, b) => String(a).localeCompare(String(b), "zh-CN", { numeric: true }));
 }
 
-function fillSelect(id, values, firstLabel = "全部") {
-  const select = document.getElementById(id);
-  const current = select.value;
-  select.innerHTML = "";
-  const all = document.createElement("option");
-  all.value = "";
-  all.textContent = firstLabel;
-  select.appendChild(all);
-  values.forEach(value => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    select.appendChild(option);
+function selectedValues(id) {
+  return [...document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)].map(input => input.value);
+}
+
+function selectedLabel(id, allLabel = "全部") {
+  const values = selectedValues(id);
+  if (!values.length) return allLabel;
+  if (values.length <= 2) return values.join("、");
+  return `${values.slice(0, 2).join("、")}等 ${values.length} 项`;
+}
+
+function updateMultiSelectLabel(id, allLabel = "全部") {
+  const button = document.querySelector(`#${id} .multi-select-button`);
+  if (button) button.textContent = selectedLabel(id, allLabel);
+}
+
+function setSelectedValues(id, values, allLabel = "全部") {
+  const selected = new Set(values.map(String));
+  document.querySelectorAll(`#${id} input[type="checkbox"]`).forEach(input => {
+    input.checked = selected.has(String(input.value));
   });
-  if ([...select.options].some(option => option.value === current)) select.value = current;
+  updateMultiSelectLabel(id, allLabel);
+}
+
+function hasOrderDateFilter() {
+  return selectedValues("filterOrderDate").length > 0;
+}
+
+function rowWithCurrentMode(row) {
+  if (!hasOrderDateFilter() || row["当日现状"] === undefined || row["当日现状"] === null || row["当日现状"] === "") {
+    return row;
+  }
+
+  const current = Number(row["当日现状"] || 0);
+  const target = Number(row["目标"] || 0);
+  return {
+    ...row,
+    "现状": current,
+    "差距": current - target,
+    "完成率": target ? current / target : null,
+  };
+}
+
+function rowsWithCurrentMode(rows) {
+  return rows.map(rowWithCurrentMode);
+}
+
+function positionMultiSelectMenu(container) {
+  const button = container.querySelector(".multi-select-button");
+  const menu = container.querySelector(".multi-select-menu");
+  if (!button || !menu || menu.hidden) return;
+
+  const gap = 6;
+  const margin = 12;
+  const buttonRect = button.getBoundingClientRect();
+  const menuWidth = Math.min(280, window.innerWidth - margin * 2);
+  const spaceBelow = window.innerHeight - buttonRect.bottom - gap - margin;
+  const spaceAbove = buttonRect.top - gap - margin;
+  const openAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+  const maxHeight = Math.max(160, Math.min(320, openAbove ? spaceAbove : spaceBelow));
+  const left = Math.min(
+    Math.max(buttonRect.left, margin),
+    window.innerWidth - menuWidth - margin
+  );
+
+  menu.style.width = `${menuWidth}px`;
+  menu.style.left = `${left}px`;
+  menu.style.maxHeight = `${maxHeight}px`;
+  if (openAbove) {
+    menu.style.top = "auto";
+    menu.style.bottom = `${window.innerHeight - buttonRect.top + gap}px`;
+  } else {
+    menu.style.top = `${buttonRect.bottom + gap}px`;
+    menu.style.bottom = "auto";
+  }
+}
+
+function fillMultiSelect(id, values, allLabel = "全部") {
+  const container = document.getElementById(id);
+  const current = new Set(selectedValues(id).map(String));
+  container.innerHTML = "";
+  container.dataset.allLabel = allLabel;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "multi-select-button";
+  button.setAttribute("aria-haspopup", "listbox");
+  button.setAttribute("aria-expanded", "false");
+
+  const menu = document.createElement("div");
+  menu.className = "multi-select-menu";
+  menu.hidden = true;
+  menu.setAttribute("role", "listbox");
+  menu.setAttribute("aria-multiselectable", "true");
+
+  const actions = document.createElement("div");
+  actions.className = "multi-select-actions";
+  const selectAll = document.createElement("button");
+  selectAll.type = "button";
+  selectAll.textContent = "全选";
+  const clearAll = document.createElement("button");
+  clearAll.type = "button";
+  clearAll.textContent = "清空";
+  actions.append(selectAll, clearAll);
+  menu.appendChild(actions);
+
+  values.forEach(value => {
+    const label = document.createElement("label");
+    label.className = "multi-select-option";
+    label.setAttribute("role", "option");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = value;
+    input.checked = current.has(String(value));
+    const span = document.createElement("span");
+    span.textContent = value;
+    label.append(input, span);
+    menu.appendChild(label);
+  });
+
+  button.addEventListener("click", event => {
+    event.stopPropagation();
+    const isOpen = !menu.hidden;
+    closeMultiSelectMenus();
+    menu.hidden = isOpen;
+    button.setAttribute("aria-expanded", String(!isOpen));
+    positionMultiSelectMenu(container);
+  });
+  selectAll.addEventListener("click", () => {
+    menu.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.checked = true;
+    });
+    updateMultiSelectLabel(id, allLabel);
+    render();
+  });
+  clearAll.addEventListener("click", () => {
+    menu.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.checked = false;
+    });
+    updateMultiSelectLabel(id, allLabel);
+    render();
+  });
+  menu.addEventListener("click", event => event.stopPropagation());
+  menu.addEventListener("change", () => {
+    updateMultiSelectLabel(id, allLabel);
+    render();
+  });
+
+  container.append(button, menu);
+  updateMultiSelectLabel(id, allLabel);
+}
+
+function closeMultiSelectMenus() {
+  document.querySelectorAll(".multi-select-menu").forEach(menu => {
+    menu.hidden = true;
+    menu.removeAttribute("style");
+  });
+  document.querySelectorAll(".multi-select-button").forEach(button => {
+    button.setAttribute("aria-expanded", "false");
+  });
+}
+
+function repositionOpenMultiSelectMenus() {
+  document.querySelectorAll(".multi-select").forEach(positionMultiSelectMenu);
 }
 
 function buildFilters() {
-  fillSelect("filterDepartment", uniqueOptions(state.allRows, "学部"));
-  fillSelect("filterTerm", uniqueOptions(state.allRows, "期次"), state.scope === "latest" ? "最新期次（默认）" : "全部期次");
-  fillSelect("filterChannel", uniqueOptions(state.allRows, "线索渠道二级分类"));
-  fillSelect("filterPayment", uniqueOptions(state.allRows, "价体").map(String));
-  fillSelect("filterOrderDate", uniqueOptions(state.allRows, "下单日期"), "全部日期");
+  fillMultiSelect("filterDepartment", uniqueOptions(state.allRows, "学部"));
+  fillMultiSelect("filterTerm", uniqueOptions(state.allRows, "期次"), state.scope === "latest" ? "最新期次（默认）" : "全部期次");
+  fillMultiSelect("filterChannel", uniqueOptions(state.allRows, "线索渠道二级分类"));
+  fillMultiSelect("filterPayment", uniqueOptions(state.allRows, "价体").map(String));
+  fillMultiSelect("filterOrderDate", uniqueOptions(state.allRows, "下单日期"), "全部日期");
 }
 
 function rowStatus(row) {
@@ -274,35 +423,36 @@ function activeRows() {
 function filteredRows() {
   const rows = activeRows();
   const filters = {
-    "学部": document.getElementById("filterDepartment").value,
-    "期次": document.getElementById("filterTerm").value,
-    "线索渠道二级分类": document.getElementById("filterChannel").value,
-    "价体": document.getElementById("filterPayment").value,
-    "下单日期": document.getElementById("filterOrderDate").value,
+    "学部": selectedValues("filterDepartment"),
+    "期次": selectedValues("filterTerm"),
+    "线索渠道二级分类": selectedValues("filterChannel"),
+    "价体": selectedValues("filterPayment"),
+    "下单日期": selectedValues("filterOrderDate"),
   };
   const keyword = document.getElementById("filterKeyword").value.trim();
 
   return rows.filter(row => {
-    for (const [key, value] of Object.entries(filters)) {
-      if (value && String(row[key]) !== String(value)) return false;
+    for (const [key, values] of Object.entries(filters)) {
+      if (values.length && !values.includes(String(row[key]))) return false;
     }
     if (keyword) {
       const haystack = tableColumns.map(key => row[key]).join(" ");
       if (!haystack.includes(keyword)) return false;
     }
-    if (state.chip === "behind" && !isBehindProgress(row)) return false;
-    if (state.chip === "fast" && rowStatus(row).text !== "快") return false;
+    const metricRow = rowWithCurrentMode(row);
+    if (state.chip === "behind" && !isBehindProgress(metricRow)) return false;
+    if (state.chip === "fast" && rowStatus(metricRow).text !== "快") return false;
     return true;
   });
 }
 
 function render() {
   document.getElementById("chipAll").textContent = `${state.scope === "latest" ? "最新期次" : "全部期次"} ${activeRows().length}`;
-  document.getElementById("chipFast").textContent = `快 ${activeRows().filter(row => rowStatus(row).text === "快").length}`;
-  const rows = filteredRows();
+  document.getElementById("chipFast").textContent = `快 ${activeRows().map(rowWithCurrentMode).filter(row => rowStatus(row).text === "快").length}`;
+  const rows = rowsWithCurrentMode(filteredRows());
   state.currentRows = rows;
   renderFilteredSummary(rows);
-  const department = document.getElementById("filterDepartment").value;
+  const department = selectedLabel("filterDepartment", "");
   document.getElementById("tableTitle").textContent = state.chip === "behind"
     ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
     : state.chip === "fast"
@@ -337,8 +487,11 @@ function showBehindDetails(department) {
   state.scope = "latest";
   state.chip = "behind";
   buildFilters();
-  document.getElementById("filterDepartment").value = department;
-  ["filterTerm", "filterChannel", "filterPayment", "filterOrderDate", "filterKeyword"].forEach(id => {
+  setSelectedValues("filterDepartment", [department]);
+  ["filterTerm", "filterChannel", "filterPayment", "filterOrderDate"].forEach(id => {
+    setSelectedValues(id, [], document.getElementById(id).dataset.allLabel || "全部");
+  });
+  ["filterKeyword"].forEach(id => {
     document.getElementById(id).value = "";
   });
   document.querySelectorAll(".chip").forEach(el => el.classList.toggle("active", el.dataset.chip === "behind"));
@@ -644,9 +797,10 @@ function bindEvents() {
   document.getElementById("demoUploadButton").addEventListener("click", () => reloadFixedFile("demo"));
   document.getElementById("targetUploadButton").addEventListener("click", () => reloadFixedFile("target"));
 
-  ["filterDepartment", "filterTerm", "filterChannel", "filterPayment", "filterOrderDate", "filterKeyword"].forEach(id => {
-    document.getElementById(id).addEventListener("input", render);
-  });
+  document.getElementById("filterKeyword").addEventListener("input", render);
+  document.addEventListener("click", closeMultiSelectMenus);
+  window.addEventListener("resize", repositionOpenMultiSelectMenus);
+  window.addEventListener("scroll", repositionOpenMultiSelectMenus, true);
 
   document.querySelectorAll(".chip").forEach(chip => {
     chip.addEventListener("click", () => {

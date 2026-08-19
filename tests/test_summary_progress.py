@@ -176,6 +176,67 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertEqual(result.loc[0, "现状"], 2)
         self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-07-03"))
 
+    def test_build_summary_keeps_daily_current_for_order_date_filter(self):
+        demo = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": 1001,
+                    "成单量": 1,
+                    "下单日期": "2026-07-02",
+                    "last_from": "source-a",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": 1002,
+                    "成单量": 1,
+                    "下单日期": "2026-07-03",
+                    "last_from": "source-a",
+                },
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "custom_uid": 1003,
+                    "成单量": 1,
+                    "下单日期": "2026-07-03",
+                    "last_from": "source-b",
+                },
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "小学",
+                    "期次": "暑_9",
+                    "线索渠道二级分类": "LLM外呼",
+                    "价体": 990,
+                    "年级": "三年级",
+                    "目标": 10,
+                    "target_time": "2026-07-08",
+                    "进量日期": "2026-07-02",
+                }
+            ]
+        )
+
+        summary, _current_summary, _target_summary = build_summary.build_summary(demo, target)
+
+        self.assertEqual(summary.loc[0, "现状"], 3)
+        self.assertEqual(summary.loc[0, "当日现状"], 2)
+        self.assertEqual(summary.loc[0, "下单日期"], "2026-07-03")
+        self.assertEqual(summary.loc[0, "差距"], -7)
+        self.assertAlmostEqual(summary.loc[0, "完成率"], 0.3)
+
     def test_counts_rows_separately_when_custom_uid_is_missing(self):
         demo = pd.DataFrame(
             [
