@@ -214,31 +214,19 @@ def aggregate_target(df):
 
 
 def assign_unmatched_current_channels(current_summary, target_summary):
-    target_channels = {}
     exact_target_keys = set()
+    target_term_keys = set()
     for row in target_summary[DIMENSIONS].itertuples(index=False, name=None):
         exact_target_keys.add(row)
-        fallback_key = (row[0], row[1], row[3], row[4])
-        target_channels.setdefault(fallback_key, set()).add(row[2])
+        target_term_keys.add((row[0], row[1]))
 
     data = current_summary.copy()
     channel_index = data.columns.get_loc("线索渠道二级分类")
     for index, row in enumerate(data[DIMENSIONS].itertuples(index=False, name=None)):
         if row in exact_target_keys:
             continue
-        if row[2] == "常规外呼":
-            continue
-        fallback_key = (row[0], row[1], row[3], row[4])
-        candidates = target_channels.get(fallback_key, set())
-        if len(candidates) == 1:
-            data.iat[index, channel_index] = next(iter(candidates))
-        elif len(candidates) > 1:
-            if "常规外呼" in candidates:
-                data.iat[index, channel_index] = "常规外呼"
-            elif "LEC内测" in candidates:
-                data.iat[index, channel_index] = "LEC内测"
-            else:
-                data.iat[index, channel_index] = "未报量"
+        if (row[0], row[1]) in target_term_keys:
+            data.iat[index, channel_index] = "未报量"
 
     return (
         data.groupby(DIMENSIONS, dropna=False, as_index=False)
@@ -247,31 +235,19 @@ def assign_unmatched_current_channels(current_summary, target_summary):
 
 
 def assign_unmatched_daily_current_channels(daily_current_summary, target_summary):
-    target_channels = {}
     exact_target_keys = set()
+    target_term_keys = set()
     for row in target_summary[DIMENSIONS].itertuples(index=False, name=None):
         exact_target_keys.add(row)
-        fallback_key = (row[0], row[1], row[3], row[4])
-        target_channels.setdefault(fallback_key, set()).add(row[2])
+        target_term_keys.add((row[0], row[1]))
 
     data = daily_current_summary.copy()
     channel_index = data.columns.get_loc("线索渠道二级分类")
     for index, row in enumerate(data[DIMENSIONS].itertuples(index=False, name=None)):
         if row in exact_target_keys:
             continue
-        if row[2] == "常规外呼":
-            continue
-        fallback_key = (row[0], row[1], row[3], row[4])
-        candidates = target_channels.get(fallback_key, set())
-        if len(candidates) == 1:
-            data.iat[index, channel_index] = next(iter(candidates))
-        elif len(candidates) > 1:
-            if "常规外呼" in candidates:
-                data.iat[index, channel_index] = "常规外呼"
-            elif "LEC内测" in candidates:
-                data.iat[index, channel_index] = "LEC内测"
-            else:
-                data.iat[index, channel_index] = "未报量"
+        if (row[0], row[1]) in target_term_keys:
+            data.iat[index, channel_index] = "未报量"
 
     return (
         data.groupby(DIMENSIONS + ["下单日期"], dropna=False, as_index=False)
@@ -451,7 +427,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["成单量最小值", int(demo["成单量"].min())],
             ["成单量最大值", int(demo["成单量"].max())],
             ["渠道归并规则", "线索渠道二级分类以“外部微转-”开头的值统一归为“外部微转-*”"],
-            ["未命中渠道归属", "常规外呼未命中 target 时保留为仅现状项；其他渠道按同一学部、期次、价体、年级寻找 target 渠道，唯一候选直接归属，多个候选优先常规外呼、其次 LEC内测，两者都没有时归为未报量，无候选保留为仅现状项"],
+            ["未命中渠道归属", "demo 渠道、价体、年级组合未命中 target 时，若同学部同期次在 target 中存在，则统一归为未报量并继续按价体、年级展示；完全 demo-only 期次保留为仅现状项"],
             ["现状计算", "按学部、期次统计 demo 全量，不按 target 进量日期过滤；同一统计维度下按 custom_uid 去重计数，custom_uid 缺失的行分别计数"],
             ["当日现状", "按学部、期次、渠道、价体、年级和下单日期统计当日 demo 去重量；前端选中下单日期时用于替换明细和当前筛选汇总的现状口径"],
             ["缺失值检查", "两个底表的指定维度字段及数值字段均无缺失"],

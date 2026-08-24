@@ -170,7 +170,7 @@ class Lec1ChannelsTest(unittest.TestCase):
         result = filter_lec1_data(demo, target)
 
         self.assertEqual(latest_lec1_term(target), "暑_12")
-        self.assertEqual(result["custom_uid"].tolist(), ["u1", "u4"])
+        self.assertEqual(result["custom_uid"].tolist(), ["u1"])
 
     def test_intake_uses_order_volume_with_custom_uid_deduplication(self):
         demo = pd.DataFrame(
@@ -235,7 +235,7 @@ class Lec1ChannelsTest(unittest.TestCase):
 
         self.assertEqual(shares, [2 / 5, 0, 2 / 5, 0, 0, 0, 1 / 5])
 
-    def test_render_lec1_share_uses_summary_total_and_counts_true_external_channel(self):
+    def test_render_lec1_share_excludes_channels_without_target_from_lec_scope(self):
         demo = pd.DataFrame(
             [
                 {
@@ -296,8 +296,8 @@ class Lec1ChannelsTest(unittest.TestCase):
                     "target_time": "2026-07-29",
                     "进量日期": "2026-07-23",
                     "目标": 8800,
-                    "现状": 3,
-                    "完成率": 3 / 8800,
+                    "现状": 2,
+                    "完成率": 2 / 8800,
                     "进度": 0.5,
                 },
             ]
@@ -310,9 +310,9 @@ class Lec1ChannelsTest(unittest.TestCase):
             output = render_lec1_share(demo, target, summary)
 
         self.assertEqual(output["summary"]["报量"], "5500")
-        self.assertEqual(output["summary"]["进量"], "3")
+        self.assertEqual(output["summary"]["进量"], "2")
         self.assertIn("YZY=1", output["summary"]["渠道进量"])
-        self.assertIn("外部微转=1", output["summary"]["渠道进量"])
+        self.assertIn("外部微转=0", output["summary"]["渠道进量"])
         self.assertIn("未配置=1", output["summary"]["渠道进量"])
 
     def test_lec1_external_count_uses_raw_external_microtransfer_only(self):

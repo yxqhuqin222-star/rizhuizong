@@ -354,21 +354,12 @@ def normalize_report_channel(value):
     return value
 
 
-def assign_summary_channel(row, exact_target_keys, fallback_channels):
+def assign_summary_channel(row, exact_target_keys, target_term_keys):
     channel = normalize_report_channel(row["线索渠道二级分类"])
     exact_key = (row["学部"], row["期次"], channel, row["价体"], row["年级"])
-    if exact_key in exact_target_keys or channel == "常规外呼":
+    if exact_key in exact_target_keys:
         return channel
-
-    fallback_key = (row["学部"], row["期次"], row["价体"], row["年级"])
-    candidates = fallback_channels.get(fallback_key, set())
-    if len(candidates) == 1:
-        return next(iter(candidates))
-    if len(candidates) > 1:
-        if "常规外呼" in candidates:
-            return "常规外呼"
-        if "LEC内测" in candidates:
-            return "LEC内测"
+    if (row["学部"], row["期次"]) in target_term_keys:
         return "未报量"
     return channel
 
@@ -385,14 +376,13 @@ def filter_lec1_data(demo, target, term=None):
     target_data["线索渠道二级分类"] = target_data["线索渠道二级分类"].map(normalize_report_channel)
 
     exact_target_keys = set()
-    fallback_channels = {}
+    target_term_keys = set()
     for row in target_data[["学部", "期次", "线索渠道二级分类", "价体", "年级"]].itertuples(index=False, name=None):
         exact_target_keys.add(row)
-        fallback_key = (row[0], row[1], row[3], row[4])
-        fallback_channels.setdefault(fallback_key, set()).add(row[2])
+        target_term_keys.add((row[0], row[1]))
 
     data["归属后渠道"] = data.apply(
-        lambda row: assign_summary_channel(row, exact_target_keys, fallback_channels),
+        lambda row: assign_summary_channel(row, exact_target_keys, target_term_keys),
         axis=1,
     )
     return data[

@@ -305,7 +305,7 @@ class SummaryProgressTest(unittest.TestCase):
         self.assertEqual(summary.loc[0, "进量日期"], "2026-07-02")
         self.assertEqual(summary.loc[0, "进度"], 0)
 
-    def test_assigns_unmatched_channel_when_target_candidate_is_unique(self):
+    def test_assigns_unmatched_channel_to_unreported_even_when_target_candidate_is_unique(self):
         current = pd.DataFrame(
             [
                 {
@@ -342,12 +342,14 @@ class SummaryProgressTest(unittest.TestCase):
 
         result = build_summary.assign_unmatched_current_channels(current, target)
 
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result.loc[0, "线索渠道二级分类"], "LEC内测")
-        self.assertEqual(result.loc[0, "现状"], 12)
-        self.assertEqual(result.loc[0, "下单日期"], pd.Timestamp("2026-07-03"))
+        self.assertEqual(len(result), 2)
+        result_by_channel = result.set_index("线索渠道二级分类")
+        self.assertEqual(result_by_channel.loc["LEC内测", "现状"], 5)
+        self.assertEqual(result_by_channel.loc["未报量", "现状"], 7)
+        self.assertEqual(result_by_channel.loc["未报量", "年级"], "三年级")
+        self.assertEqual(result_by_channel.loc["未报量", "下单日期"], pd.Timestamp("2026-07-03"))
 
-    def test_keeps_unmatched_regular_outbound_as_current_only(self):
+    def test_assigns_unmatched_regular_outbound_to_unreported_when_target_term_exists(self):
         current = pd.DataFrame(
             [
                 {
@@ -375,10 +377,10 @@ class SummaryProgressTest(unittest.TestCase):
 
         result = build_summary.assign_unmatched_current_channels(current, target)
 
-        self.assertEqual(result.loc[0, "线索渠道二级分类"], "常规外呼")
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "未报量")
         self.assertEqual(result.loc[0, "现状"], 7)
 
-    def test_prefers_regular_outbound_when_target_has_multiple_candidates(self):
+    def test_assigns_unmatched_channel_to_unreported_when_target_has_multiple_candidates(self):
         current = pd.DataFrame(
             [
                 {
@@ -413,9 +415,9 @@ class SummaryProgressTest(unittest.TestCase):
 
         result = build_summary.assign_unmatched_current_channels(current, target)
 
-        self.assertEqual(result.loc[0, "线索渠道二级分类"], "常规外呼")
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "未报量")
 
-    def test_prefers_lec_when_multiple_candidates_do_not_include_regular_outbound(self):
+    def test_assigns_unmatched_channel_to_unreported_when_lec_is_a_candidate(self):
         current = pd.DataFrame(
             [
                 {
@@ -450,9 +452,9 @@ class SummaryProgressTest(unittest.TestCase):
 
         result = build_summary.assign_unmatched_current_channels(current, target)
 
-        self.assertEqual(result.loc[0, "线索渠道二级分类"], "LEC内测")
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "未报量")
 
-    def test_assigns_unreported_when_multiple_candidates_have_no_preferred_channel(self):
+    def test_assigns_unreported_when_target_term_exists_and_channel_has_no_exact_target(self):
         current = pd.DataFrame(
             [
                 {
@@ -489,6 +491,102 @@ class SummaryProgressTest(unittest.TestCase):
 
         self.assertEqual(result.loc[0, "线索渠道二级分类"], "未报量")
         self.assertEqual(result.loc[0, "现状"], 7)
+
+    def test_assigns_unreported_when_target_term_exists_but_channel_has_no_target(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_5",
+                    "线索渠道二级分类": "包包卡",
+                    "价体": 0,
+                    "年级": "初一",
+                    "现状": 3,
+                    "下单日期": pd.Timestamp("2026-08-19"),
+                }
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_5",
+                    "线索渠道二级分类": "AI托管",
+                    "价体": 990,
+                    "年级": "初一",
+                }
+            ]
+        )
+
+        result = build_summary.assign_unmatched_current_channels(current, target)
+
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "未报量")
+        self.assertEqual(result.loc[0, "价体"], 0)
+        self.assertEqual(result.loc[0, "现状"], 3)
+
+    def test_keeps_demo_only_term_as_current_only_when_target_term_is_absent(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_6",
+                    "线索渠道二级分类": "包包卡",
+                    "价体": 0,
+                    "年级": "初一",
+                    "现状": 3,
+                    "下单日期": pd.Timestamp("2026-08-19"),
+                }
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_5",
+                    "线索渠道二级分类": "AI托管",
+                    "价体": 990,
+                    "年级": "初一",
+                }
+            ]
+        )
+
+        result = build_summary.assign_unmatched_current_channels(current, target)
+
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "包包卡")
+        self.assertEqual(result.loc[0, "现状"], 3)
+
+    def test_assigns_unreported_daily_current_when_target_term_exists_but_channel_has_no_target(self):
+        current = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_5",
+                    "线索渠道二级分类": "包包卡",
+                    "价体": 0,
+                    "年级": "初一",
+                    "下单日期": pd.Timestamp("2026-08-19"),
+                    "当日现状": 3,
+                }
+            ]
+        )
+        target = pd.DataFrame(
+            [
+                {
+                    "学部": "初中",
+                    "期次": "秋_5",
+                    "线索渠道二级分类": "AI托管",
+                    "价体": 990,
+                    "年级": "初一",
+                }
+            ]
+        )
+
+        result = build_summary.assign_unmatched_daily_current_channels(current, target)
+
+        self.assertEqual(result.loc[0, "线索渠道二级分类"], "未报量")
+        self.assertEqual(result.loc[0, "价体"], 0)
+        self.assertEqual(result.loc[0, "当日现状"], 3)
+
     def test_formats_payment_for_display_without_changing_source(self):
         source = pd.DataFrame({"价体": [0, 100, 990, 1880, 2880]})
 
