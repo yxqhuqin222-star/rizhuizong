@@ -21,7 +21,7 @@ const naturalQueryState = {
 const apiBase = "";
 const readOnlyMode = window.DASHBOARD_READ_ONLY === true;
 const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "下单日期", "目标", "现状", "差距", "完成率", "进度"];
-const metricDepartments = ["小学", "初中", "高中"];
+const metricDepartments = ["小学", "初中", "高中", "自拼"];
 
 function fmtNumber(value) {
   return Number(value || 0).toLocaleString("zh-CN");
@@ -61,6 +61,7 @@ function openReport(dept) {
       primary: "/reports/primary_daily_progress.png",
       middle: "/reports/middle_daily_progress.png",
       high: "/reports/high_daily_progress.png",
+      zipin: "/reports/zipin_daily_progress.png",
       lec1: "/reports/lec1_share.png",
     };
     window.open(state.reportUrls[dept] || reportFiles[dept], "_blank", "noopener,noreferrer");
@@ -759,7 +760,7 @@ async function loadNaturalQueryPage(page) {
 }
 
 async function broadcastReport(dept) {
-  const labels = { overall: "总进度", primary: "小学", middle: "初中", high: "高中", lec1: "1元占比" };
+  const labels = { overall: "总进度", primary: "小学", middle: "初中", high: "高中", zipin: "自拼", lec1: "1元占比" };
   toast(`正在播报${labels[dept]}图片到钉钉...`);
   try {
     const result = await requestJson("/api/broadcast-report", {
@@ -868,11 +869,13 @@ function bindEvents() {
   document.getElementById("reportOverall").addEventListener("click", () => openReport("overall"));
   document.getElementById("reportMiddle").addEventListener("click", () => openReport("middle"));
   document.getElementById("reportHigh").addEventListener("click", () => openReport("high"));
+  document.getElementById("reportZipin").addEventListener("click", () => openReport("zipin"));
   document.getElementById("reportLec1").addEventListener("click", () => openReport("lec1"));
   document.getElementById("broadcastPrimary").addEventListener("click", () => broadcastReport("primary"));
   document.getElementById("broadcastOverall").addEventListener("click", () => broadcastReport("overall"));
   document.getElementById("broadcastMiddle").addEventListener("click", () => broadcastReport("middle"));
   document.getElementById("broadcastHigh").addEventListener("click", () => broadcastReport("high"));
+  document.getElementById("broadcastZipin").addEventListener("click", () => broadcastReport("zipin"));
   document.getElementById("broadcastLec1").addEventListener("click", () => broadcastReport("lec1"));
 }
 

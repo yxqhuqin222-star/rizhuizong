@@ -1,7 +1,7 @@
 import { getStore } from "@netlify/blobs";
 
-const REPORT_TYPES = new Set(["overall", "primary", "middle", "high", "lec1"]);
-const REPORT_KEY_PATTERN = /^(overall|primary|middle|high|lec1)\/\d+-[0-9a-f-]+\.png$/;
+const REPORT_TYPES = new Set(["overall", "primary", "middle", "high", "zipin", "lec1"]);
+const REPORT_KEY_PATTERN = /^(overall|primary|middle|high|zipin|lec1)\/\d+-[0-9a-f-]+\.png$/;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export default async function reportImage(request) {

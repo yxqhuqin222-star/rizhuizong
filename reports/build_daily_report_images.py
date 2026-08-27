@@ -14,8 +14,8 @@ DEMO_PATH = ROOT / "tongji_demo.xlsx"
 TARGET_PATH = ROOT / "tongji_target.xlsx"
 OUT_DIR = ROOT / "reports" / "daily_progress"
 TOTAL_DAYS = 6
-DEPARTMENTS = ["小学", "初中", "高中"]
-DEPARTMENT_FILE_SLUGS = {"小学": "primary", "初中": "middle", "高中": "high"}
+DEPARTMENTS = ["小学", "初中", "高中", "自拼"]
+DEPARTMENT_FILE_SLUGS = {"小学": "primary", "初中": "middle", "高中": "high", "自拼": "zipin"}
 TERM_SEASON_ORDER = {
     "春": 1,
     "暑": 2,
@@ -23,6 +23,7 @@ TERM_SEASON_ORDER = {
     "寒": 4,
 }
 GRADE_ORDER = {
+    "一年级": 0,
     "二年级": 1,
     "三年级": 2,
     "四年级": 3,
@@ -645,7 +646,7 @@ def render_overall_progress(df):
     <header>
       <div>
         <h1>{html.escape(title)}</h1>
-        <p>范围：小学、初中、高中各自最新 target 期次 · 生成日期：{date_text}</p>
+        <p>范围：小学、初中、高中、自拼各自最新 target 期次 · 生成日期：{date_text}</p>
       </div>
     </header>
     <section class="card overall-card">

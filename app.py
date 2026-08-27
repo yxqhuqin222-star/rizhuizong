@@ -41,6 +41,7 @@ REPORT_FILES = {
     "primary": REPORT_DIR / "primary_daily_progress.png",
     "middle": REPORT_DIR / "middle_daily_progress.png",
     "high": REPORT_DIR / "high_daily_progress.png",
+    "zipin": REPORT_DIR / "zipin_daily_progress.png",
     "lec1": REPORT_DIR / "lec1_share.png",
 }
 REPORT_LABELS = {
@@ -48,6 +49,7 @@ REPORT_LABELS = {
     "primary": "小学",
     "middle": "初中",
     "high": "高中",
+    "zipin": "自拼",
     "lec1": "lec内测小学量级",
 }
 STATIC_REPORT_URLS = {
@@ -55,6 +57,7 @@ STATIC_REPORT_URLS = {
     "primary": "/reports/primary_daily_progress.png",
     "middle": "/reports/middle_daily_progress.png",
     "high": "/reports/high_daily_progress.png",
+    "zipin": "/reports/zipin_daily_progress.png",
     "lec1": "/reports/lec1_share.png",
 }
 DINGTALK_KEYWORD = "成单"
@@ -204,8 +207,12 @@ def upload_report_image(dept, image_path):
         method="POST",
     )
     label = f"播报图同步（{online_endpoint_label(REPORT_IMAGE_UPLOAD_URL)}）"
-    with open_online_request(request, timeout=30, label=label) as response:
-        result = json.loads(response.read().decode("utf-8"))
+    try:
+        with open_online_request(request, timeout=30, label=label) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"{label}失败（HTTP {exc.code}）：{detail}") from exc
     image_url = result.get("url")
     if not image_url:
         raise RuntimeError("图片存储服务未返回公开地址。")

@@ -348,6 +348,7 @@ class ArtifactConsistencyTest(unittest.TestCase):
                 {"学部": "小学", "期次": "暑_2", "target_time": "2026-07-08", "目标": 20, "现状": 25, "进度": 1},
                 {"学部": "初中", "期次": "秋_1", "target_time": "2026-08-01", "目标": 30, "现状": 10, "进度": 0.5},
                 {"学部": "高中", "期次": "秋_1", "target_time": "2026-08-01", "目标": 40, "现状": 20, "进度": 0.75},
+                {"学部": "自拼", "期次": "暑_1", "target_time": "2026-08-01", "目标": 5, "现状": 4, "进度": 0.5},
             ]
         )
 
@@ -362,6 +363,7 @@ class ArtifactConsistencyTest(unittest.TestCase):
         self.assertIn("现状=25", output["summary"]["小学"])
         self.assertIn("完成率=125.0%", output["summary"]["小学"])
         self.assertIn("平均进度=100%", output["summary"]["小学"])
+        self.assertIn("目标=5", output["summary"]["自拼"])
 
     def test_csv_xlsx_and_manifest_share_current_summary_metrics(self):
         csv = pd.read_csv(ROOT / "outputs/tongji_summary/tongji_summary_current.csv")
@@ -378,14 +380,14 @@ class ArtifactConsistencyTest(unittest.TestCase):
         self.assertEqual(int(csv["现状"].sum()), int(xlsx["现状"].sum()))
 
         overall = manifest["overall"]
-        for department in ["小学", "初中", "高中"]:
+        for department in ["小学", "初中", "高中", "自拼"]:
             scoped = csv[csv["学部"].eq(department)]
             term = latest_target_term(scoped)
             latest = scoped[scoped["期次"].eq(term)]
             self.assertIn(f"目标={int(latest['目标'].sum()):,}", overall["summary"][department])
             self.assertIn(f"现状={int(latest['现状'].sum()):,}", overall["summary"][department])
 
-        for dept in ["小学", "初中", "高中"]:
+        for dept in ["小学", "初中", "高中", "自拼"]:
             item = manifest[dept]
             scoped = csv[csv["学部"].eq(dept) & csv["期次"].eq(item["term"])]
             target = int(scoped["目标"].sum())
@@ -393,10 +395,13 @@ class ArtifactConsistencyTest(unittest.TestCase):
             progress = pd.to_numeric(scoped["进度"], errors="coerce")
             self.assertEqual(item["summary"]["目标"], str(target))
             self.assertEqual(item["summary"]["成单量"], str(current))
-            self.assertEqual(
-                item["summary"]["平均进度"],
-                str(progress.dropna().mean()),
-            )
+            if progress.notna().any():
+                self.assertEqual(
+                    float(item["summary"]["平均进度"]),
+                    progress.dropna().mean(),
+                )
+            else:
+                self.assertIsNone(item["summary"]["平均进度"])
 
         lec1 = manifest["lec1"]
         self.assertEqual(lec1["summary"]["报量"], "5500")

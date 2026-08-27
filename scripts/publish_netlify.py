@@ -22,7 +22,7 @@ PROJECT_PYTHON = Path(
     "codex-primary-runtime/dependencies/python/bin/python3"
 )
 PYTHON_BIN = str(PROJECT_PYTHON if PROJECT_PYTHON.exists() else Path(sys.executable))
-DEPARTMENTS = ("小学", "初中", "高中")
+DEPARTMENTS = ("小学", "初中", "高中", "自拼")
 PUBLISH_PATHS = (
     "tongji_demo.xlsx",
     "tongji_target.xlsx",
@@ -173,6 +173,7 @@ def validate_outputs() -> tuple[dict, dict[str, dict]]:
         report_dir / "primary_daily_progress.png",
         report_dir / "middle_daily_progress.png",
         report_dir / "high_daily_progress.png",
+        report_dir / "zipin_daily_progress.png",
         report_dir / "lec1_share.png",
     )
     for path in required_files:

@@ -74,6 +74,7 @@ def build():
             "primary": "/reports/primary_daily_progress.png",
             "middle": "/reports/middle_daily_progress.png",
             "high": "/reports/high_daily_progress.png",
+            "zipin": "/reports/zipin_daily_progress.png",
             "lec1": "/reports/lec1_share.png",
         },
     }
@@ -97,6 +98,7 @@ def build():
         "primary_daily_progress.png",
         "middle_daily_progress.png",
         "high_daily_progress.png",
+        "zipin_daily_progress.png",
         "lec1_share.png",
     )
     for name in report_names:

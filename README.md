@@ -39,6 +39,6 @@ archives/            历史压缩快照
 
 ## 钉钉播报
 
-看板支持生成小学、初中、高中每日招生进度播报图，以及 `lec1元占比` 播报图。用户可以在本地看板下载图片，也可以通过钉钉机器人发送到群里。
+看板支持生成小学、初中、高中、自拼每日招生进度播报图，以及 `lec1元占比` 播报图。用户可以在本地看板下载图片，也可以通过钉钉机器人发送到群里。
 
 播报图样例和字段口径见 [PRD 的 Daily broadcast images and DingTalk delivery 小节](./docs/PRD-progress-dashboard.md#daily-broadcast-images-and-dingtalk-delivery)。真实群播报需要配置 `DINGTALK_WEBHOOK`；如果钉钉客户端需要访问公网图片地址，还需要配置 `DINGTALK_REPORT_BASE_URL`，或配合 `REPORT_IMAGE_UPLOAD_URL` 和 `REPORT_UPLOAD_TOKEN` 上传图片。

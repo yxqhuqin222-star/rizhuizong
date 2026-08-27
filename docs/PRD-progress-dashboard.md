@@ -20,9 +20,9 @@
 
 | 功能 | 竞品 | 本产品 | 实现方式 |
 |---|---|---|---|
-| 最新期次默认视图 | 通用 Excel 或 BI 往往展示全量数据，需要人工筛选 | 默认只展示小学、初中、高中各自 target 表里的最新期次，同时保留全量切换 | 期次按 春、暑、秋、寒 和数字后缀排序，从 target 表确定默认范围 |
+| 最新期次默认视图 | 通用 Excel 或 BI 往往展示全量数据，需要人工筛选 | 默认只展示小学、初中、高中、自拼各自 target 表里的最新期次，同时保留全量切换 | 期次按 春、暑、秋、寒 和数字后缀排序，从 target 表确定默认范围 |
 | 指标口径一致 | 表格、截图和群播报容易由不同公式生成 | 页面 KPI、明细表、Excel、播报图和接口共享同一 Summary | `outputs/tongji_summary/build_summary.py` 生成统一 payload，其他输出只消费该结果 |
-| 每日播报闭环 | 常见做法需要截图、修图、上传、复制消息 | 看板内下载小学、初中、高中、lec内测小学量级图片，并可发送到钉钉机器人 | reload 成功后先生成 Summary、工作簿、HTML 和 PNG，再暴露下载与播报接口 |
+| 每日播报闭环 | 常见做法需要截图、修图、上传、复制消息 | 看板内下载小学、初中、高中、自拼、lec内测小学量级图片，并可发送到钉钉机器人 | reload 成功后先生成 Summary、工作簿、HTML 和 PNG，再暴露下载与播报接口 |
 | 规则化自然语言查询 | Excel 需要用户记住筛选字段和别名 | 支持日期、渠道别名、last_from、学部、期次、价体、年级等组合查询，并返回解释和明细 | 从 demo 和 target 提取词表，缺关键条件时逐轮澄清，不使用外部模型 |
 | 线上只读同步 | 本地文件不便分享当天结果 | 本地更新后同步状态、工作簿和播报图到线上只读页面，失败时保留本地结果并进入补偿队列 | 本地服务调用线上接口，缺 token 或网络失败时写入 `state/sync_queue.json` |
 
@@ -49,7 +49,7 @@
 | 硬约束 | 推荐默认 | 发挥空间 |
 |---|---|---|
 | 同名指标在看板汇总、明细表、工作簿、播报图和接口中必须来自同一计算结果 | 保持 `build_summary.py` 作为指标唯一入口 | 可以改善代码组织，但不得让输出端重新实现公式 |
-| 学部级当前日期必须来自 demo 中同学部同一期次的最大下单日期 | 页面默认展示小学、初中、高中三行概览 | 可以增加更清晰的日期解释和 hover 文案 |
+| 学部级当前日期必须来自 demo 中同学部同一期次的最大下单日期 | 页面默认展示小学、初中、高中、自拼四行概览 | 可以增加更清晰的日期解释和 hover 文案 |
 | target 中同学部同一期次的 `target_time` 和 `进量日期` 出现多个值时停止生成 | 错误直接显示中文字段名和冲突学部期次 | 可以提供下载错误报告或复制错误详情 |
 | 价体展示统一为原始值除以 100，去除无意义小数位 | 保留源文件原始值，不回写 Excel 源文件 | 可以在 UI 中加单位标识 |
 | 自然语言查询不能在多义值中静默选择 | 每次只问一个缺失条件，最多澄清两轮 | 可以优化示例问题和解释视图 |
@@ -212,6 +212,7 @@ reports/build_daily_report_images.py
     +-- writes primary_daily_progress.png
     +-- writes middle_daily_progress.png
     +-- writes high_daily_progress.png
+    +-- writes zipin_daily_progress.png
     +-- writes lec1_share.png
 ```
 
@@ -278,7 +279,7 @@ reports/build_daily_report_images.py
 #### e) 待决问题
 
 - 此处未解决：`custom_uid` 缺失行是否长期按行单独计数；当前硬约束是缺失时每行单独计入现状。
-- 此处未解决：自拼之外是否还会出现需要进入明细但排除 KPI 的特殊学部；当前只支持 `自拼`。
+- 此处未解决：未来是否还会出现需要进入明细但排除 KPI 的特殊学部；当前 `自拼` 已作为 target 表中的正式学部纳入 KPI。
 
 #### f) 指标口径
 
@@ -437,6 +438,7 @@ POST /api/query
 | 按钮：下载小学播报图  按钮：播报小学到钉钉 |
 | 按钮：下载初中播报图  按钮：播报初中到钉钉 |
 | 按钮：下载高中播报图  按钮：播报高中到钉钉 |
+| 按钮：下载自拼播报图  按钮：播报自拼到钉钉 |
 | 按钮：下载1元占比图   按钮：播报1元占比到钉钉 |
 | 状态：成单播报已发送，图片地址可访问       |
 +--------------------------------------------+
@@ -545,7 +547,7 @@ POST /api/broadcast-report
 重算完成
     |
     v
-生成 小学 / 初中 / 高中 / lec内测小学量级 PNG
+生成 小学 / 初中 / 高中 / 自拼 / lec内测小学量级 PNG
     |
     +-- 下载 --> 新标签打开图片
     |
@@ -602,7 +604,7 @@ POST /api/broadcast-report
   "summary": { // 必填；完整 Summary 明细集合，以稳定行号或哈希为键
     "row_001": {
       "version": "1.0", // 必填；明细行结构版本
-      "学部": "小学", // 必填；允许值来自源文件，概览只统计小学、初中、高中
+      "学部": "小学", // 必填；允许值来自源文件，概览统计小学、初中、高中、自拼
       "期次": "暑_10", // 必填；期次文本，排序按季节和数字后缀
       "线索渠道二级分类": "LEC内测", // 必填；外部微转系列归并为外部微转-*
       "价体": 1, // 必填；展示值，源文件价体除以 100
@@ -618,8 +620,8 @@ POST /api/broadcast-report
       "进度": 0.833333 // 默认值: null；范围 0 到 1，缺日期时为空
     }
   },
-  "latestSummary": {}, // 必填；小学、初中、高中各自最新 target 期次行集合
-  "detailLatestSummary": {}, // 必填；最新期次明细集合，允许包含自拼现状行
+  "latestSummary": {}, // 必填；小学、初中、高中、自拼各自最新 target 期次行集合
+  "detailLatestSummary": {}, // 必填；最新期次明细集合，允许包含 demo-only 现状行
   "metrics": {
     "version": "1.0", // 必填；指标结构版本
     "latest": {
@@ -635,6 +637,7 @@ POST /api/broadcast-report
     "primary": "/reports/primary_daily_progress.png", // 小学播报图路径
     "middle": "/reports/middle_daily_progress.png", // 初中播报图路径
     "high": "/reports/high_daily_progress.png", // 高中播报图路径
+    "zipin": "/reports/zipin_daily_progress.png", // 自拼播报图路径
     "lec1": "/reports/lec1_share.png" // lec内测小学量级播报图路径
   },
   "sync": {
@@ -783,7 +786,7 @@ POST /api/broadcast-report
 | CSV 当前视图 | 按筛选条件导出跟进清单 | 文件顶部包含当前筛选汇总 | 前端从当前行集合生成 |
 | CSV 查询明细 | 自然语言查询结果留痕 | 导出全部匹配行，不只当前页 | 来源为 query_result.csv |
 | XLSX 工作簿 | 交付给习惯 Excel 的用户 | 单一当前工作簿 | 路径为 `outputs/tongji_summary/tongji_summary_current.xlsx` |
-| PNG 播报图 | 群播报和图片转发 | 固定宽度视觉输出 | 小学、初中、高中、lec内测小学量级 |
+| PNG 播报图 | 群播报和图片转发 | 固定宽度视觉输出 | 小学、初中、高中、自拼、lec内测小学量级 |
 | HTML 播报源 | 视觉排查和图片生成中间件 | 浏览器真实渲染 | 不作为用户主要交付格式 |
 | JSON state | 线上只读看板和接口消费 | UTF-8 JSON | `/api/state` |
 
@@ -808,6 +811,8 @@ reports/
 |   +-- middle_daily_progress.png
 |   +-- high_daily_progress.html
 |   +-- high_daily_progress.png
+|   +-- zipin_daily_progress.html
+|   +-- zipin_daily_progress.png
 |   +-- lec1_share.html
 |   +-- lec1_share.png
 |   +-- manifest.json
@@ -867,7 +872,7 @@ state/
 | 页面 state 加载时间 | 小于等于 1200ms | 本机请求 `GET /api/state`，payload 已存在时测量 | 大于 3000ms |
 | demo 或 target 重算总耗时 | 小于等于 30000ms | 点击 reload 后到 JSON 返回，包含 Summary、工作簿、播报图生成 | 大于 60000ms |
 | Summary 行数一致性 | 100% 一致 | 比较 payload、CSV、XLSX 中关键列行数和合计 | 任一不一致 |
-| 最新期次概览一致性 | 100% 一致 | 小学、初中、高中分别比较输入日期、明细唯一进度和顶部进度 | 任一学部不一致 |
+| 最新期次概览一致性 | 100% 一致 | 小学、初中、高中、自拼分别比较输入日期、明细唯一进度和顶部进度 | 任一学部不一致 |
 | 查询提交响应时间 | 小于等于 2000ms | 运行典型查询 `6月27日YZY渠道的进量` | 大于 5000ms |
 | 播报图文件存在率 | 4/4 | reload 后检查四个 PNG 路径存在且文件大小大于 10KB | 少于 4 个或任一小于等于 10KB |
 | 钉钉 payload 可验证性 | 100% | mock webhook 或 payload 构造测试，检查包含关键词和图片 URL | 缺关键词或 URL |
@@ -922,14 +927,14 @@ curl -s http://127.0.0.1:8766/api/health
 python3 -m unittest tests/test_summary_progress.py tests/test_daily_report_images.py
 ```
 
-成功标志：小学、初中、高中的当前日期、明细唯一进度、顶部进度使用同一计算结果；target_time 和进量日期冲突测试能阻止生成。
+成功标志：小学、初中、高中、自拼的当前日期、明细唯一进度、顶部进度使用同一计算结果；target_time 和进量日期冲突测试能阻止生成。
 
 验收剧本 3：播报图输出
 
 ```bash
 python3 reports/build_daily_report_images.py
 node reports/export_daily_report_images.mjs
-ls -lh reports/daily_progress/overall_progress.png reports/daily_progress/primary_daily_progress.png reports/daily_progress/middle_daily_progress.png reports/daily_progress/high_daily_progress.png reports/daily_progress/lec1_share.png
+ls -lh reports/daily_progress/overall_progress.png reports/daily_progress/primary_daily_progress.png reports/daily_progress/middle_daily_progress.png reports/daily_progress/high_daily_progress.png reports/daily_progress/zipin_daily_progress.png reports/daily_progress/lec1_share.png
 ```
 
 成功标志：五张 PNG 均存在，文件大小大于 10KB，manifest 指向当前生成路径。

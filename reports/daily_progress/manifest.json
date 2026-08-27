@@ -1,26 +1,26 @@
 [
   {
     "dept": "小学",
-    "term": "暑_16",
+    "term": "暑_17",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/primary_daily_progress.png",
     "summary": {
-      "目标": "7250",
-      "成单量": "4089",
-      "完成率": "0.564",
-      "平均进度": "0.6666666666666665"
+      "目标": "6850",
+      "成单量": "0",
+      "完成率": "0.0",
+      "平均进度": null
     }
   },
   {
     "dept": "初中",
-    "term": "秋_5",
+    "term": "秋_6",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/middle_daily_progress.png",
     "summary": {
-      "目标": "9600",
-      "成单量": "6360",
-      "完成率": "0.6625",
-      "平均进度": "0.8333333333333334"
+      "目标": "9700",
+      "成单量": "1235",
+      "完成率": "0.12731958762886597",
+      "平均进度": "0.16666666666666657"
     }
   },
   {
@@ -30,9 +30,21 @@
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/high_daily_progress.png",
     "summary": {
       "目标": "9340",
-      "成单量": "4856",
-      "完成率": "0.519914346895075",
-      "平均进度": "0.6666666666666666"
+      "成单量": "7269",
+      "完成率": "0.7782655246252677",
+      "平均进度": "0.8333333333333334"
+    }
+  },
+  {
+    "dept": "自拼",
+    "term": "暑_17",
+    "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/zipin_daily_progress.html",
+    "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/zipin_daily_progress.png",
+    "summary": {
+      "目标": "1000",
+      "成单量": "68",
+      "完成率": "0.068",
+      "平均进度": "0.3333333333333333"
     }
   },
   {
@@ -41,22 +53,23 @@
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/overall_progress.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/overall_progress.png",
     "summary": {
-      "小学": "目标=7,250；现状=4,089；完成率=56.4%；平均进度=67%",
-      "初中": "目标=9,600；现状=6,360；完成率=66.2%；平均进度=83%",
-      "高中": "目标=9,340；现状=4,856；完成率=52.0%；平均进度=67%"
+      "小学": "目标=6,850；现状=0；完成率=0.0%；平均进度=--",
+      "初中": "目标=9,700；现状=1,235；完成率=12.7%；平均进度=17%",
+      "高中": "目标=9,340；现状=7,269；完成率=77.8%；平均进度=83%",
+      "自拼": "目标=1,000；现状=68；完成率=6.8%；平均进度=33%"
     }
   },
   {
     "dept": "lec1",
-    "term": "暑_16",
+    "term": "暑_17",
     "html": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.html",
     "png": "/Users/kityhello/workplace/project/rizhuizong/reports/daily_progress/lec1_share.png",
     "summary": {
-      "范围": "小学 暑_16 LEC内测 1元/9元/9.9元 同进度表口径",
+      "范围": "小学 暑_17 LEC内测 1元/9元/9.9元 同进度表口径",
       "报量": "5500",
-      "进量": "2696",
-      "渠道进量": "YZY=515；WC=694；RQ（9.9+1）=255；JJ=34；SH=1；ZXC=78；ZH（9）=0；外部微转=0；未配置=1,119",
-      "实际占比": "YZY=19%；WC=26%；RQ（9.9+1）=9%；JJ=1%；SH=0%；ZXC=3%；ZH（9）=0%；外部微转=0%；未配置=42%"
+      "进量": "0",
+      "渠道进量": "YZY=0；WC=0；RQ（9.9+1）=0；JJ=0；SH=0；ZXC=0；ZH（9）=0；外部微转=0",
+      "实际占比": "YZY=0%；WC=0%；RQ（9.9+1）=0%；JJ=0%；SH=0%；ZXC=0%；ZH（9）=0%；外部微转=0%"
     }
   }
 ]

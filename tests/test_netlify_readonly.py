@@ -35,6 +35,10 @@ class NetlifyReadonlyBuildTests(unittest.TestCase):
             state["reportUrls"]["primary"],
             "/reports/primary_daily_progress.png",
         )
+        self.assertEqual(
+            state["reportUrls"]["zipin"],
+            "/reports/zipin_daily_progress.png",
+        )
         self.assertIn("DASHBOARD_READ_ONLY", (public / "web" / "index.html").read_text())
         self.assertTrue((public / "downloads" / "tongji_summary_current.xlsx").is_file())
 
@@ -43,6 +47,7 @@ class NetlifyReadonlyBuildTests(unittest.TestCase):
             "primary_daily_progress.png",
             "middle_daily_progress.png",
             "high_daily_progress.png",
+            "zipin_daily_progress.png",
             "lec1_share.png",
         ):
             self.assertTrue((public / "reports" / name).is_file())

@@ -21,7 +21,7 @@ class PublishNetlifyTests(unittest.TestCase):
         payload, snapshot = publish_netlify.validate_outputs()
 
         self.assertTrue(payload["latest_summary"]["rows"])
-        self.assertEqual(set(snapshot), {"小学", "初中", "高中"})
+        self.assertEqual(set(snapshot), {"小学", "初中", "高中", "自拼"})
         for department in snapshot.values():
             self.assertGreater(department["target"], 0)
             self.assertGreaterEqual(department["current"], 0)
