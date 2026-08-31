@@ -27,6 +27,7 @@ const readOnlyMode = window.DASHBOARD_READ_ONLY === true;
 const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "下单日期", "目标", "现状", "差距", "完成率", "进度"];
 const dailyTableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "下单日期", "当日现状"];
 const dailyAggregateColumns = ["学部", "期次", "渠道展示", "招生目标", "成单量", "量级GAP", "招生进度", "时间进度", "进度GAP", "剩余天数", "状态"];
+const dailyGradeAggregateColumns = ["学部", "期次", "年级", "招生目标", "成单量", "量级GAP", "招生进度", "时间进度", "进度GAP", "剩余天数", "状态"];
 const metricDepartments = ["小学", "初中", "高中", "自拼"];
 const gradeOrder = ["一年级", "二年级", "三年级", "四年级", "五年级", "六年级", "初一", "初二", "初三", "高一", "高二", "高三"];
 const gradeOrderIndex = new Map(gradeOrder.map((grade, index) => [grade, index]));
@@ -75,6 +76,7 @@ function dailyChannelLabel(row) {
 
 function currentExportColumns() {
   if (!state.showDailyData) return tableColumns;
+  if (state.dailyView === "gradeAggregate") return dailyGradeAggregateColumns;
   if (state.dailyView !== "channelAggregate") return dailyTableColumns;
   return dailyAggregateColumns;
 }
@@ -224,15 +226,12 @@ function renderFilteredSummary(rows) {
   const container = document.getElementById("filteredSummary");
   container.className = "filtered-summary";
   const summary = filteredSummaryForRows(rows);
-  const progressText = summary.progress_note || fmtPercent(summary.progress) || "-";
   const items = [
     ["当前筛选", `${fmtNumber(summary.count)} 条`],
     ["目标", fmtNumber(summary.target_total)],
     ["现状", fmtNumber(summary.current_total)],
     ["差距", fmtNumber(summary.difference_total)],
     ["完成率", fmtPercent(summary.completion) || "-"],
-    ["进度", progressText],
-    ["落后", `${fmtNumber(summary.behind_count)} 条`],
   ];
   container.innerHTML = items
     .map(([label, value]) => `
@@ -445,13 +444,17 @@ function repositionOpenMultiSelectMenus() {
 }
 
 function buildFilters() {
-  const rows = state.showDailyData && state.dailyView !== "channelAggregate" ? state.dailyRows : state.allRows;
+  const rows = state.showDailyData && !isDailyAggregateView() ? state.dailyRows : state.allRows;
   fillMultiSelect("filterDepartment", uniqueOptions(rows, "学部"));
   fillMultiSelect("filterTerm", uniqueOptions(rows, "期次"), state.scope === "latest" ? "最新期次（默认）" : "全部期次");
   fillMultiSelect("filterChannel", uniqueOptions(rows, "线索渠道二级分类"));
   fillMultiSelect("filterPayment", uniqueOptions(rows, "价体").map(String));
   fillMultiSelect("filterOrderDate", uniqueOptions(rows, "下单日期"), "全部日期");
   fillMultiSelect("filterGrade", gradeOptions(rows));
+}
+
+function isDailyAggregateView() {
+  return state.dailyView === "channelAggregate" || state.dailyView === "gradeAggregate";
 }
 
 function rowStatus(row) {
@@ -468,13 +471,68 @@ function rowStatus(row) {
 }
 
 function activeRows() {
-  if (state.showDailyData && state.dailyView === "channelAggregate") {
+  if (state.showDailyData && isDailyAggregateView()) {
     return state.scope === "latest" ? state.latestRows : state.allRows;
   }
   if (state.showDailyData) {
     return state.scope === "latest" ? state.latestDailyRows : state.dailyRows;
   }
   return state.scope === "latest" ? state.latestRows : state.allRows;
+}
+
+function dailyGradeAggregateRows(rows) {
+  const grouped = new Map();
+
+  rows.forEach(row => {
+    const keyParts = [row["学部"] ?? "", row["期次"] ?? "", row["年级"] ?? ""];
+    const key = keyParts.join("\u0001");
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        "学部": keyParts[0],
+        "期次": keyParts[1],
+        "年级": keyParts[2],
+        "招生目标": 0,
+        "成单量": 0,
+        "进度": null,
+      });
+    }
+    const output = grouped.get(key);
+    output["招生目标"] += Number(row["目标"] || 0);
+    output["成单量"] += Number(row["现状"] || 0);
+    const timeProgress = Number(row["进度"]);
+    if (Number.isFinite(timeProgress)) {
+      output["进度"] = output["进度"] === null ? timeProgress : Math.max(output["进度"], timeProgress);
+    }
+  });
+
+  const outputRows = [...grouped.values()].map(row => {
+    const enrollmentProgress = row["招生目标"] ? row["成单量"] / row["招生目标"] : null;
+    const gap = progressGap(enrollmentProgress, row["进度"]);
+    return {
+      ...row,
+      "量级GAP": row["成单量"] - row["招生目标"],
+      "招生进度": enrollmentProgress,
+      "时间进度": row["进度"],
+      "进度GAP": gap,
+      "剩余天数": remainingDays(row["进度"]),
+      "状态": rowStatus({
+        "目标": row["招生目标"],
+        "现状": row["成单量"],
+        "完成率": enrollmentProgress,
+        "进度": row["进度"],
+      }).text,
+    };
+  }).sort((a, b) => {
+    const leftGrade = gradeOrderIndex.has(String(a["年级"])) ? gradeOrderIndex.get(String(a["年级"])) : gradeOrder.length;
+    const rightGrade = gradeOrderIndex.has(String(b["年级"])) ? gradeOrderIndex.get(String(b["年级"])) : gradeOrder.length;
+    return (
+      String(a["学部"]).localeCompare(String(b["学部"]), "zh-CN", { numeric: true })
+      || String(a["期次"]).localeCompare(String(b["期次"]), "zh-CN", { numeric: true })
+      || leftGrade - rightGrade
+      || String(a["年级"]).localeCompare(String(b["年级"]), "zh-CN", { numeric: true })
+    );
+  });
+  return { rows: outputRows };
 }
 
 function dailyAggregateRows(rows) {
@@ -574,7 +632,9 @@ function render() {
   const baseRows = state.showDailyData ? filteredRows() : rowsWithCurrentMode(filteredRows());
   const aggregate = state.showDailyData && state.dailyView === "channelAggregate"
     ? dailyAggregateRows(baseRows)
-    : null;
+    : state.showDailyData && state.dailyView === "gradeAggregate"
+      ? dailyGradeAggregateRows(baseRows)
+      : null;
   const rows = aggregate ? aggregate.rows : baseRows;
   state.currentRows = rows;
   renderCurrentSummary(baseRows);
@@ -584,15 +644,15 @@ function render() {
     ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
     : state.chip === "fast"
       ? `${department ? `${department} · ` : ""}快项明细（${rows.length}）`
-      : `${department ? `${department} · ` : ""}${state.scope === "latest" ? "最新期次" : "全部期次"}${state.showDailyData ? (state.dailyView === "channelAggregate" ? "渠道聚合" : "日数据") : "明细"}（${rows.length}）`;
+      : `${department ? `${department} · ` : ""}${state.scope === "latest" ? "最新期次" : "全部期次"}${state.showDailyData ? (state.dailyView === "channelAggregate" ? "渠道聚合" : state.dailyView === "gradeAggregate" ? "年级聚合" : "日数据") : "明细"}（${rows.length}）`;
   const tbody = document.getElementById("summaryBody");
   tbody.innerHTML = "";
 
   rows.forEach(row => {
-    if (state.showDailyData && state.dailyView === "channelAggregate") {
+    if (state.showDailyData && isDailyAggregateView()) {
       const tr = document.createElement("tr");
       tr.className = "daily-row daily-aggregate-row";
-      tr.innerHTML = dailyAggregateColumns.map(column => renderDailyAggregateCell(row, column)).join("");
+      tr.innerHTML = currentExportColumns().map(column => renderDailyAggregateCell(row, column)).join("");
       tbody.appendChild(tr);
       return;
     }
@@ -635,8 +695,39 @@ function render() {
 function renderDailySummary(rows) {
   const container = document.getElementById("filteredSummary");
   container.className = "filtered-summary daily-summary";
-  const currentKey = state.dailyView === "channelAggregate" ? "现状" : "当日现状";
-  const currentLabel = state.dailyView === "channelAggregate" ? "成单量" : "当日进量";
+  if (isDailyAggregateView()) {
+    const targetTotal = rows.reduce((sum, row) => sum + Number(row["目标"] || 0), 0);
+    const currentTotal = rows.reduce((sum, row) => sum + Number(row["现状"] || 0), 0);
+    const enrollmentProgress = targetTotal ? currentTotal / targetTotal : null;
+    const timeProgressValues = rows
+      .map(row => row["进度"])
+      .filter(value => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)))
+      .map(value => Number(value).toFixed(6));
+    const uniqueTimeProgressValues = [...new Set(timeProgressValues)];
+    const timeProgress = uniqueTimeProgressValues.length === 1 ? Number(uniqueTimeProgressValues[0]) : null;
+    const timeProgressText = uniqueTimeProgressValues.length > 1 ? "多值" : (fmtPercent(timeProgress) || "-");
+    const gap = currentTotal - targetTotal;
+    const progressGapText = timeProgress === null ? "-" : (fmtPercent(progressGap(enrollmentProgress, timeProgress)) || "-");
+    const items = [
+      ["招生目标", fmtNumber(targetTotal)],
+      ["成单量", fmtNumber(currentTotal)],
+      ["量级GAP", fmtNumber(gap)],
+      ["招生进度", fmtPercent(enrollmentProgress) || "-"],
+      ["时间进度", timeProgressText],
+      ["进度GAP", progressGapText],
+    ];
+    container.innerHTML = items
+      .map(([label, value], index) => `
+        <div class="filtered-summary-item${index === 1 ? " daily-total" : ""}">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </div>
+      `)
+      .join("");
+    return;
+  }
+  const currentKey = isDailyAggregateView() ? "现状" : "当日现状";
+  const currentLabel = isDailyAggregateView() ? "成单量" : "当日进量";
   const dailyTotal = rows.reduce((sum, row) => sum + Number(row[currentKey] || 0), 0);
   const dates = uniqueOptions(rows, "下单日期");
   const dateRange = (() => {
@@ -655,7 +746,7 @@ function renderDailySummary(rows) {
     ["日期范围", dateRange],
     ["期次", `${fmtNumber(terms.length)} 个`],
     ["渠道", `${fmtNumber(channels.length)} 个`],
-    ["当前模式", state.dailyView === "channelAggregate" ? "渠道聚合" : "日数据"],
+    ["当前模式", state.dailyView === "channelAggregate" ? "渠道聚合" : state.dailyView === "gradeAggregate" ? "年级聚合" : "日数据"],
   ];
   container.innerHTML = items
     .map(([label, value], index) => `
@@ -697,14 +788,17 @@ function renderTableMode() {
     element.hidden = daily;
   });
   const channelAggregate = daily && state.dailyView === "channelAggregate";
-  const dailyDetail = daily && state.dailyView !== "channelAggregate";
+  const gradeAggregate = daily && state.dailyView === "gradeAggregate";
+  const dailyDetail = daily && !isDailyAggregateView();
+  document.getElementById("dailyGradeAggregateButton").classList.toggle("active", gradeAggregate);
+  document.getElementById("dailyGradeAggregateButton").setAttribute("aria-pressed", String(gradeAggregate));
   document.getElementById("dailyChannelAggregateButton").classList.toggle("active", channelAggregate);
   document.getElementById("dailyChannelAggregateButton").setAttribute("aria-pressed", String(channelAggregate));
   document.getElementById("toggleDailyButton").classList.toggle("active", dailyDetail);
   document.getElementById("toggleDailyButton").setAttribute("aria-pressed", String(dailyDetail));
   document.getElementById("summary").classList.toggle("daily-mode", daily);
   document.getElementById("summaryTable").classList.toggle("daily-table", daily);
-  document.getElementById("summaryTable").classList.toggle("daily-aggregate-table", daily && state.dailyView === "channelAggregate");
+  document.getElementById("summaryTable").classList.toggle("daily-aggregate-table", daily && isDailyAggregateView());
   renderTableHead();
 }
 
@@ -720,6 +814,16 @@ function toggleDailyData() {
 function openDailyChannelAggregate() {
   state.showDailyData = true;
   state.dailyView = "channelAggregate";
+  state.chip = "all";
+  document.querySelectorAll(".chip").forEach(el => el.classList.toggle("active", el.dataset.chip === "all"));
+  buildFilters();
+  render();
+  document.getElementById("summary").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function openDailyGradeAggregate() {
+  state.showDailyData = true;
+  state.dailyView = "gradeAggregate";
   state.chip = "all";
   document.querySelectorAll(".chip").forEach(el => el.classList.toggle("active", el.dataset.chip === "all"));
   buildFilters();
@@ -1055,6 +1159,7 @@ function bindEvents() {
   });
 
   document.getElementById("toggleDailyButton").addEventListener("click", toggleDailyData);
+  document.getElementById("dailyGradeAggregateButton").addEventListener("click", openDailyGradeAggregate);
   document.getElementById("dailyChannelAggregateButton").addEventListener("click", openDailyChannelAggregate);
   document.getElementById("toggleScopeButton").addEventListener("click", toggleScope);
   document.getElementById("showAllButton").addEventListener("click", () => { if (state.scope !== "all") toggleScope(); });
