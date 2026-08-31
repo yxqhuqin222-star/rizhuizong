@@ -496,6 +496,10 @@ def state_payload():
         "detailLatestSummary": rows_from_payload(
             payload.get("detail_latest_summary", payload["latest_summary"])
         ),
+        "dailySummary": rows_from_payload(payload.get("daily_summary", {"headers": [], "rows": []})),
+        "latestDailySummary": rows_from_payload(
+            payload.get("latest_daily_summary", {"headers": [], "rows": []})
+        ),
         "metrics": payload["metrics"],
         "files": {
             "demo": file_info(DEMO_PATH, "demo"),

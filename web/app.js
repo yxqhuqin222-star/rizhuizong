@@ -2,8 +2,12 @@ const state = {
   allRows: [],
   latestRows: [],
   detailLatestRows: [],
+  dailyRows: [],
+  latestDailyRows: [],
   scope: "latest",
   chip: "all",
+  showDailyData: false,
+  dailyView: "detail",
   currentRows: [],
   reportUrls: {},
 };
@@ -21,7 +25,11 @@ const naturalQueryState = {
 const apiBase = "";
 const readOnlyMode = window.DASHBOARD_READ_ONLY === true;
 const tableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "target_time", "下单日期", "目标", "现状", "差距", "完成率", "进度"];
+const dailyTableColumns = ["学部", "期次", "线索渠道二级分类", "价体", "年级", "下单日期", "当日现状"];
+const dailyAggregateColumns = ["学部", "期次", "渠道展示", "招生目标", "成单量", "量级GAP", "招生进度", "时间进度", "进度GAP", "剩余天数", "状态"];
 const metricDepartments = ["小学", "初中", "高中", "自拼"];
+const gradeOrder = ["一年级", "二年级", "三年级", "四年级", "五年级", "六年级", "初一", "初二", "初三", "高一", "高二", "高三"];
+const gradeOrderIndex = new Map(gradeOrder.map((grade, index) => [grade, index]));
 
 function fmtNumber(value) {
   return Number(value || 0).toLocaleString("zh-CN");
@@ -30,6 +38,45 @@ function fmtNumber(value) {
 function fmtPercent(value) {
   if (value === null || value === undefined || value === "") return "";
   return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function clampProgress(value) {
+  if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return null;
+  return Math.max(0, Math.min(Number(value), 1));
+}
+
+function progressGap(enrollmentProgress, timeProgress) {
+  const enrollment = clampProgress(enrollmentProgress);
+  const time = clampProgress(timeProgress);
+  if (enrollment === null || time === null) return null;
+  return time - enrollment;
+}
+
+function remainingDays(progress) {
+  const value = clampProgress(progress);
+  if (value === null) return "--";
+  const progressDays = Math.round(value * 6);
+  if (progressDays >= 6) return "0";
+  return String(Math.max(6 - progressDays, 1));
+}
+
+function formatPaymentForChannel(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const number = Number(value);
+  if (Number.isFinite(number)) return `${Number.isInteger(number) ? number : number.toFixed(1).replace(/\.0$/, "")}元`;
+  return `${value}元`;
+}
+
+function dailyChannelLabel(row) {
+  const channel = row["线索渠道二级分类"] ?? "";
+  const payment = formatPaymentForChannel(row["价体"]);
+  return payment ? `${channel}-${payment}` : String(channel);
+}
+
+function currentExportColumns() {
+  if (!state.showDailyData) return tableColumns;
+  if (state.dailyView !== "channelAggregate") return dailyTableColumns;
+  return dailyAggregateColumns;
 }
 
 function toast(message) {
@@ -108,6 +155,8 @@ async function loadState() {
     state.allRows = data.summary;
     state.latestRows = data.latestSummary;
     state.detailLatestRows = data.detailLatestSummary || data.latestSummary;
+    state.dailyRows = data.dailySummary || [];
+    state.latestDailyRows = data.latestDailySummary || [];
     state.reportUrls = data.reportUrls || {};
     renderFileInfo(data.files);
     renderMetrics(data.metrics.latest);
@@ -172,6 +221,8 @@ function filteredSummaryForRows(rows) {
 }
 
 function renderFilteredSummary(rows) {
+  const container = document.getElementById("filteredSummary");
+  container.className = "filtered-summary";
   const summary = filteredSummaryForRows(rows);
   const progressText = summary.progress_note || fmtPercent(summary.progress) || "-";
   const items = [
@@ -183,7 +234,7 @@ function renderFilteredSummary(rows) {
     ["进度", progressText],
     ["落后", `${fmtNumber(summary.behind_count)} 条`],
   ];
-  document.getElementById("filteredSummary").innerHTML = items
+  container.innerHTML = items
     .map(([label, value]) => `
       <div class="filtered-summary-item">
         <span>${label}</span>
@@ -230,6 +281,14 @@ function uniqueOptions(rows, key) {
     .sort((a, b) => String(a).localeCompare(String(b), "zh-CN", { numeric: true }));
 }
 
+function gradeOptions(rows) {
+  return uniqueOptions(rows, "年级").sort((a, b) => {
+    const left = gradeOrderIndex.has(String(a)) ? gradeOrderIndex.get(String(a)) : gradeOrder.length;
+    const right = gradeOrderIndex.has(String(b)) ? gradeOrderIndex.get(String(b)) : gradeOrder.length;
+    return left - right || String(a).localeCompare(String(b), "zh-CN", { numeric: true });
+  });
+}
+
 function selectedValues(id) {
   return [...document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)].map(input => input.value);
 }
@@ -259,18 +318,7 @@ function hasOrderDateFilter() {
 }
 
 function rowWithCurrentMode(row) {
-  if (!hasOrderDateFilter() || row["当日现状"] === undefined || row["当日现状"] === null || row["当日现状"] === "") {
-    return row;
-  }
-
-  const current = Number(row["当日现状"] || 0);
-  const target = Number(row["目标"] || 0);
-  return {
-    ...row,
-    "现状": current,
-    "差距": current - target,
-    "完成率": target ? current / target : null,
-  };
+  return row;
 }
 
 function rowsWithCurrentMode(rows) {
@@ -397,11 +445,13 @@ function repositionOpenMultiSelectMenus() {
 }
 
 function buildFilters() {
-  fillMultiSelect("filterDepartment", uniqueOptions(state.allRows, "学部"));
-  fillMultiSelect("filterTerm", uniqueOptions(state.allRows, "期次"), state.scope === "latest" ? "最新期次（默认）" : "全部期次");
-  fillMultiSelect("filterChannel", uniqueOptions(state.allRows, "线索渠道二级分类"));
-  fillMultiSelect("filterPayment", uniqueOptions(state.allRows, "价体").map(String));
-  fillMultiSelect("filterOrderDate", uniqueOptions(state.allRows, "下单日期"), "全部日期");
+  const rows = state.showDailyData && state.dailyView !== "channelAggregate" ? state.dailyRows : state.allRows;
+  fillMultiSelect("filterDepartment", uniqueOptions(rows, "学部"));
+  fillMultiSelect("filterTerm", uniqueOptions(rows, "期次"), state.scope === "latest" ? "最新期次（默认）" : "全部期次");
+  fillMultiSelect("filterChannel", uniqueOptions(rows, "线索渠道二级分类"));
+  fillMultiSelect("filterPayment", uniqueOptions(rows, "价体").map(String));
+  fillMultiSelect("filterOrderDate", uniqueOptions(rows, "下单日期"), "全部日期");
+  fillMultiSelect("filterGrade", gradeOptions(rows));
 }
 
 function rowStatus(row) {
@@ -418,7 +468,83 @@ function rowStatus(row) {
 }
 
 function activeRows() {
-  return state.scope === "latest" ? state.detailLatestRows : state.allRows;
+  if (state.showDailyData && state.dailyView === "channelAggregate") {
+    return state.scope === "latest" ? state.latestRows : state.allRows;
+  }
+  if (state.showDailyData) {
+    return state.scope === "latest" ? state.latestDailyRows : state.dailyRows;
+  }
+  return state.scope === "latest" ? state.latestRows : state.allRows;
+}
+
+function dailyAggregateRows(rows) {
+  const grouped = new Map();
+
+  rows.forEach(row => {
+    const keyParts = [row["学部"] ?? "", row["期次"] ?? "", dailyChannelLabel(row)];
+    const key = keyParts.join("\u0001");
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        "学部": keyParts[0],
+        "期次": keyParts[1],
+        "渠道展示": keyParts[2],
+        "招生目标": 0,
+        "成单量": 0,
+        "进度": null,
+      });
+    }
+    const output = grouped.get(key);
+    output["招生目标"] += Number(row["目标"] || 0);
+    output["成单量"] += Number(row["现状"] || 0);
+    const timeProgress = Number(row["进度"]);
+    if (Number.isFinite(timeProgress)) {
+      output["进度"] = output["进度"] === null ? timeProgress : Math.max(output["进度"], timeProgress);
+    }
+  });
+
+  const outputRows = [...grouped.values()].map(row => {
+    const enrollmentProgress = row["招生目标"] ? row["成单量"] / row["招生目标"] : null;
+    const gap = progressGap(enrollmentProgress, row["进度"]);
+    return {
+      ...row,
+      "量级GAP": row["成单量"] - row["招生目标"],
+      "招生进度": enrollmentProgress,
+      "时间进度": row["进度"],
+      "进度GAP": gap,
+      "剩余天数": remainingDays(row["进度"]),
+      "状态": rowStatus({
+        "目标": row["招生目标"],
+        "现状": row["成单量"],
+        "完成率": enrollmentProgress,
+        "进度": row["进度"],
+      }).text,
+    };
+  }).sort((a, b) => (
+    String(a["学部"]).localeCompare(String(b["学部"]), "zh-CN", { numeric: true })
+    || String(a["期次"]).localeCompare(String(b["期次"]), "zh-CN", { numeric: true })
+    || String(a["渠道展示"]).localeCompare(String(b["渠道展示"]), "zh-CN", { numeric: true })
+  ));
+  return { rows: outputRows };
+}
+
+function renderDailyAggregateCell(row, column) {
+  if (["招生目标", "成单量", "量级GAP"].includes(column)) {
+    return `<td class="num">${fmtNumber(row[column])}</td>`;
+  }
+  if (["招生进度", "时间进度", "进度GAP"].includes(column)) {
+    return `<td class="num">${fmtPercent(row[column]) || "--"}</td>`;
+  }
+  if (column === "状态") {
+    const cls = {
+      "未开单": "empty",
+      "仅现状": "current-only",
+      "落后": "late",
+      "已完成": "done",
+      "快": "normal",
+    }[row[column]] || "normal";
+    return `<td><span class="status ${cls}">${row[column] ?? "--"}</span></td>`;
+  }
+  return `<td class="${column === "渠道展示" ? "daily-channel" : ""}" title="${row[column] ?? ""}">${row[column] ?? ""}</td>`;
 }
 
 function filteredRows() {
@@ -429,17 +555,14 @@ function filteredRows() {
     "线索渠道二级分类": selectedValues("filterChannel"),
     "价体": selectedValues("filterPayment"),
     "下单日期": selectedValues("filterOrderDate"),
+    "年级": selectedValues("filterGrade"),
   };
-  const keyword = document.getElementById("filterKeyword").value.trim();
 
   return rows.filter(row => {
     for (const [key, values] of Object.entries(filters)) {
       if (values.length && !values.includes(String(row[key]))) return false;
     }
-    if (keyword) {
-      const haystack = tableColumns.map(key => row[key]).join(" ");
-      if (!haystack.includes(keyword)) return false;
-    }
+    if (state.showDailyData) return true;
     const metricRow = rowWithCurrentMode(row);
     if (state.chip === "behind" && !isBehindProgress(metricRow)) return false;
     if (state.chip === "fast" && rowStatus(metricRow).text !== "快") return false;
@@ -448,21 +571,46 @@ function filteredRows() {
 }
 
 function render() {
-  document.getElementById("chipAll").textContent = `${state.scope === "latest" ? "最新期次" : "全部期次"} ${activeRows().length}`;
-  document.getElementById("chipFast").textContent = `快 ${activeRows().map(rowWithCurrentMode).filter(row => rowStatus(row).text === "快").length}`;
-  const rows = rowsWithCurrentMode(filteredRows());
+  const baseRows = state.showDailyData ? filteredRows() : rowsWithCurrentMode(filteredRows());
+  const aggregate = state.showDailyData && state.dailyView === "channelAggregate"
+    ? dailyAggregateRows(baseRows)
+    : null;
+  const rows = aggregate ? aggregate.rows : baseRows;
   state.currentRows = rows;
-  renderFilteredSummary(rows);
+  renderCurrentSummary(baseRows);
+  renderTableMode();
   const department = selectedLabel("filterDepartment", "");
   document.getElementById("tableTitle").textContent = state.chip === "behind"
     ? `${department ? `${department} · ` : ""}落后项明细（${rows.length}）`
     : state.chip === "fast"
       ? `${department ? `${department} · ` : ""}快项明细（${rows.length}）`
-      : `${department ? `${department} · ` : ""}${state.scope === "latest" ? "最新期次" : "全部期次"}明细（${rows.length}）`;
+      : `${department ? `${department} · ` : ""}${state.scope === "latest" ? "最新期次" : "全部期次"}${state.showDailyData ? (state.dailyView === "channelAggregate" ? "渠道聚合" : "日数据") : "明细"}（${rows.length}）`;
   const tbody = document.getElementById("summaryBody");
   tbody.innerHTML = "";
 
   rows.forEach(row => {
+    if (state.showDailyData && state.dailyView === "channelAggregate") {
+      const tr = document.createElement("tr");
+      tr.className = "daily-row daily-aggregate-row";
+      tr.innerHTML = dailyAggregateColumns.map(column => renderDailyAggregateCell(row, column)).join("");
+      tbody.appendChild(tr);
+      return;
+    }
+    if (state.showDailyData) {
+      const tr = document.createElement("tr");
+      tr.className = "daily-row";
+      tr.innerHTML = `
+        <td>${row["学部"] ?? ""}</td>
+        <td>${row["期次"] ?? ""}</td>
+        <td class="daily-channel" title="${row["线索渠道二级分类"] ?? ""}">${row["线索渠道二级分类"] ?? ""}</td>
+        <td class="num">${row["价体"] ?? ""}</td>
+        <td>${row["年级"] ?? ""}</td>
+        <td><span class="daily-date">${row["下单日期"] ?? ""}</span></td>
+        <td class="num"><span class="daily-intake">${fmtNumber(row["当日现状"])}</span></td>
+      `;
+      tbody.appendChild(tr);
+      return;
+    }
     const status = rowStatus(row);
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -484,16 +632,109 @@ function render() {
   });
 }
 
+function renderDailySummary(rows) {
+  const container = document.getElementById("filteredSummary");
+  container.className = "filtered-summary daily-summary";
+  const currentKey = state.dailyView === "channelAggregate" ? "现状" : "当日现状";
+  const currentLabel = state.dailyView === "channelAggregate" ? "成单量" : "当日进量";
+  const dailyTotal = rows.reduce((sum, row) => sum + Number(row[currentKey] || 0), 0);
+  const dates = uniqueOptions(rows, "下单日期");
+  const dateRange = (() => {
+    if (!dates.length) return "-";
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    const compactLast = first.slice(0, 4) === last.slice(0, 4) ? last.slice(5) : last;
+    return `${first} 至 ${compactLast}`;
+  })();
+  const channels = uniqueOptions(rows, "线索渠道二级分类");
+  const terms = uniqueOptions(rows, "期次");
+  const items = [
+    ["当前筛选", `${fmtNumber(rows.length)} 条`],
+    [currentLabel, fmtNumber(dailyTotal)],
+    ["覆盖日期", `${fmtNumber(dates.length)} 天`],
+    ["日期范围", dateRange],
+    ["期次", `${fmtNumber(terms.length)} 个`],
+    ["渠道", `${fmtNumber(channels.length)} 个`],
+    ["当前模式", state.dailyView === "channelAggregate" ? "渠道聚合" : "日数据"],
+  ];
+  container.innerHTML = items
+    .map(([label, value], index) => `
+      <div class="filtered-summary-item${index === 1 ? " daily-total" : ""}">
+        <span>${label}</span>
+        <strong>${value}</strong>
+      </div>
+    `)
+    .join("");
+}
+
+function renderTableHead() {
+  const head = document.getElementById("summaryHead");
+  const numericHeaders = new Set(["价体", "目标", "现状", "当日现状", "差距", "完成率", "进度", "招生目标", "成单量", "量级GAP", "招生进度", "时间进度", "进度GAP", "剩余天数"]);
+  const headers = currentExportColumns();
+  head.innerHTML = `
+    <tr>
+      ${headers.map(header => `<th class="${numericHeaders.has(header) ? "num" : ""}">${header === "线索渠道二级分类" ? "渠道" : header}</th>`).join("")}
+      ${state.showDailyData ? "" : "<th>状态</th>"}
+    </tr>
+  `;
+}
+
+function renderCurrentSummary(rows) {
+  if (state.showDailyData) {
+    renderDailySummary(rows);
+    return;
+  }
+  renderFilteredSummary(rows);
+}
+
+function renderTableMode() {
+  const daily = state.showDailyData;
+  document.getElementById("chipAll").textContent = `${state.scope === "latest" ? "最新期次" : "全部期次"} ${activeRows().length}`;
+  document.getElementById("chipFast").textContent = daily
+    ? "快 0"
+    : `快 ${activeRows().map(rowWithCurrentMode).filter(row => rowStatus(row).text === "快").length}`;
+  document.querySelectorAll(".chip:not(#chipAll)").forEach(element => {
+    element.hidden = daily;
+  });
+  const channelAggregate = daily && state.dailyView === "channelAggregate";
+  const dailyDetail = daily && state.dailyView !== "channelAggregate";
+  document.getElementById("dailyChannelAggregateButton").classList.toggle("active", channelAggregate);
+  document.getElementById("dailyChannelAggregateButton").setAttribute("aria-pressed", String(channelAggregate));
+  document.getElementById("toggleDailyButton").classList.toggle("active", dailyDetail);
+  document.getElementById("toggleDailyButton").setAttribute("aria-pressed", String(dailyDetail));
+  document.getElementById("summary").classList.toggle("daily-mode", daily);
+  document.getElementById("summaryTable").classList.toggle("daily-table", daily);
+  document.getElementById("summaryTable").classList.toggle("daily-aggregate-table", daily && state.dailyView === "channelAggregate");
+  renderTableHead();
+}
+
+function toggleDailyData() {
+  state.showDailyData = !state.showDailyData;
+  state.dailyView = "detail";
+  state.chip = "all";
+  document.querySelectorAll(".chip").forEach(el => el.classList.toggle("active", el.dataset.chip === "all"));
+  buildFilters();
+  render();
+}
+
+function openDailyChannelAggregate() {
+  state.showDailyData = true;
+  state.dailyView = "channelAggregate";
+  state.chip = "all";
+  document.querySelectorAll(".chip").forEach(el => el.classList.toggle("active", el.dataset.chip === "all"));
+  buildFilters();
+  render();
+  document.getElementById("summary").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function showBehindDetails(department) {
   state.scope = "latest";
   state.chip = "behind";
+  state.showDailyData = false;
   buildFilters();
   setSelectedValues("filterDepartment", [department]);
-  ["filterTerm", "filterChannel", "filterPayment", "filterOrderDate"].forEach(id => {
+  ["filterTerm", "filterChannel", "filterPayment", "filterOrderDate", "filterGrade"].forEach(id => {
     setSelectedValues(id, [], document.getElementById(id).dataset.allLabel || "全部");
-  });
-  ["filterKeyword"].forEach(id => {
-    document.getElementById(id).value = "";
   });
   document.querySelectorAll(".chip").forEach(el => el.classList.toggle("active", el.dataset.chip === "behind"));
   document.getElementById("toggleScopeButton").textContent = "切换到全部期次";
@@ -512,6 +753,8 @@ async function reloadFixedFile(kind) {
     state.allRows = data.state.summary;
     state.latestRows = data.state.latestSummary;
     state.detailLatestRows = data.state.detailLatestSummary || data.state.latestSummary;
+    state.dailyRows = data.state.dailySummary || [];
+    state.latestDailyRows = data.state.latestDailySummary || [];
     state.reportUrls = data.state.reportUrls || {};
     renderFileInfo(data.state.files);
     renderMetrics(data.state.metrics.latest);
@@ -798,7 +1041,6 @@ function bindEvents() {
   document.getElementById("demoUploadButton").addEventListener("click", () => reloadFixedFile("demo"));
   document.getElementById("targetUploadButton").addEventListener("click", () => reloadFixedFile("target"));
 
-  document.getElementById("filterKeyword").addEventListener("input", render);
   document.addEventListener("click", closeMultiSelectMenus);
   window.addEventListener("resize", repositionOpenMultiSelectMenus);
   window.addEventListener("scroll", repositionOpenMultiSelectMenus, true);
@@ -812,6 +1054,8 @@ function bindEvents() {
     });
   });
 
+  document.getElementById("toggleDailyButton").addEventListener("click", toggleDailyData);
+  document.getElementById("dailyChannelAggregateButton").addEventListener("click", openDailyChannelAggregate);
   document.getElementById("toggleScopeButton").addEventListener("click", toggleScope);
   document.getElementById("showAllButton").addEventListener("click", () => { if (state.scope !== "all") toggleScope(); });
   document.getElementById("refreshButton").addEventListener("click", loadState);
@@ -898,11 +1142,15 @@ function exportCurrentRows() {
     toast("当前视图没有可导出的数据");
     return;
   }
-  exportRows(state.currentRows, `summary_current_view_${state.scope}.csv`, filteredSummaryForRows(state.currentRows));
+  exportRows(
+    state.currentRows,
+    `${state.showDailyData ? "daily" : "summary"}_current_view_${state.scope}.csv`,
+    null,
+    currentExportColumns(),
+  );
 }
 
-function exportRows(rows, filename, summary = null) {
-  const headers = tableColumns;
+function exportRows(rows, filename, summary = null, headers = tableColumns) {
   const escape = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const summaryLines = summary ? [
     ["当前筛选", `${summary.count} 条`, "目标", summary.target_total, "现状", summary.current_total, "差距", summary.difference_total, "完成率", fmtPercent(summary.completion), "进度", summary.progress_note || fmtPercent(summary.progress), "落后", `${summary.behind_count} 条`].map(escape).join(","),

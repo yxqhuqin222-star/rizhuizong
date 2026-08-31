@@ -350,6 +350,16 @@ def detail_latest_term_rows(summary, target_summary):
     )
 
 
+def latest_daily_rows(daily_summary, target_summary):
+    target_terms = target_summary[["学部", "期次"]].drop_duplicates().copy()
+    target_terms["term_rank"] = target_terms["期次"].map(term_key)
+    latest_terms = target_terms.loc[
+        target_terms["term_rank"].eq(target_terms.groupby("学部")["term_rank"].transform("max")),
+        ["学部", "期次"],
+    ].drop_duplicates()
+    return daily_summary.merge(latest_terms, on=["学部", "期次"], how="inner")
+
+
 def frame_to_payload(df):
     return {
         "headers": list(df.columns),
@@ -379,9 +389,17 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
     out_dir.mkdir(parents=True, exist_ok=True)
     latest_summary = latest_term_rows(summary, target_summary)
     detail_latest_summary = detail_latest_term_rows(summary, target_summary)
+    daily_summary = assign_unmatched_daily_current_channels(
+        aggregate_current_by_order_date(demo),
+        target_summary,
+    ).sort_values(DIMENSIONS + ["下单日期"], kind="stable")
+    daily_summary["下单日期"] = daily_summary["下单日期"].dt.strftime("%Y-%m-%d")
+    latest_daily_summary = latest_daily_rows(daily_summary, target_summary)
     output_summary = format_payment_for_output(summary)
     output_latest_summary = format_payment_for_output(latest_summary)
     output_detail_latest_summary = format_payment_for_output(detail_latest_summary)
+    output_daily_summary = format_payment_for_output(daily_summary)
+    output_latest_daily_summary = format_payment_for_output(latest_daily_summary)
     output_summary.to_csv(out_dir / "tongji_summary_current.csv", index=False, encoding="utf-8-sig")
     latest_terms = (
         latest_summary[["学部", "期次"]]
@@ -438,7 +456,7 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
             ["渠道归并规则", "线索渠道二级分类以“外部微转-”开头的值统一归为“外部微转-*”"],
             ["未命中渠道归属", "demo 渠道、价体、年级组合未命中 target 时，若同学部同期次在 target 中存在，则统一归为未报量并继续按价体、年级展示；完全 demo-only 期次保留为仅现状项"],
             ["现状计算", "按学部、期次统计 demo 全量，不按 target 进量日期过滤；同一统计维度下按 custom_uid 去重计数，custom_uid 缺失的行分别计数"],
-            ["当日现状", "按学部、期次、渠道、价体、年级和下单日期统计当日 demo 去重量；前端选中下单日期时用于替换明细和当前筛选汇总的现状口径"],
+            ["当日现状", "按学部、期次、渠道、价体、年级和下单日期统计当日 demo 去重量；前端点击展示日数据时用于查看每日进量"],
             ["缺失值检查", "两个底表的指定维度字段及数值字段均无缺失"],
         ],
         columns=["指标", "值"],
@@ -449,6 +467,8 @@ def write_outputs(summary, current_summary, target_summary, demo, target, out_di
         "summary": frame_to_payload(output_summary),
         "latest_summary": frame_to_payload(output_latest_summary),
         "detail_latest_summary": frame_to_payload(output_detail_latest_summary),
+        "daily_summary": frame_to_payload(output_daily_summary),
+        "latest_daily_summary": frame_to_payload(output_latest_daily_summary),
         "metrics": {
             "all": metrics_for(summary),
             "latest": metrics_for(latest_summary),

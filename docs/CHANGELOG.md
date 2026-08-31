@@ -4,6 +4,10 @@
 
 ## 2026-08-24
 
+### Added
+
+- Summary 明细标题右侧增加「展示日数据」开关，默认关闭；打开后按当前筛选展示每日下单日期维度的当日进量，并随 summary payload 输出 `daily_summary` 和 `latest_daily_summary` 供本地与只读看板一致使用。
+
 ### Changed
 
 - Summary、工作簿和播报图去掉未命中渠道的旧候选归属规则；demo 渠道、价体、年级组合未命中 target 且同学部同期次存在 target 时，统一归入未报量，不再按同价体/年级候选归入常规外呼或 LEC内测。

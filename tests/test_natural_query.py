@@ -16,6 +16,7 @@ class FixedDatetime(datetime):
 class NaturalQueryTest(unittest.TestCase):
     def setUp(self):
         self.yzy = "out_wxst_wxstqt_1774944753086"
+        self.pool36 = "out_wxst_wxstqt_1781763685243"
         self.demo = pd.DataFrame(
             [
                 {
@@ -79,6 +80,26 @@ class NaturalQueryTest(unittest.TestCase):
                     "价体": 100,
                     "线索渠道二级分类": "LLM外呼",
                     "last_from": "out_llm_c",
+                },
+                {
+                    "下单日期": "2026-08-24",
+                    "成单量": 166,
+                    "年级": "高二",
+                    "学部": "高中",
+                    "期次": "秋_3",
+                    "价体": 1,
+                    "线索渠道二级分类": "爆量再植课",
+                    "last_from": self.pool36,
+                },
+                {
+                    "下单日期": "2026-08-24",
+                    "成单量": 449,
+                    "年级": "高一",
+                    "学部": "高中",
+                    "期次": "秋_3",
+                    "价体": 1,
+                    "线索渠道二级分类": "常规外呼",
+                    "last_from": "out_other_pool",
                 },
             ]
         )
@@ -155,6 +176,21 @@ class NaturalQueryTest(unittest.TestCase):
         self.assertEqual(result["status"], "complete")
         self.assertEqual(result["total"], 3)
         self.assertEqual(result["conditions"]["last_from"], self.yzy)
+
+    def test_36_pool_alias_filters_last_from_with_department_and_date(self):
+        result = app.run_natural_query(
+            "8月24日36池高中进了多少单",
+            demo=self.demo,
+            export_path=None,
+        )
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["total"], 166)
+        self.assertEqual(result["matchedRows"], 1)
+        self.assertEqual(result["conditions"]["date"], "2026-08-24")
+        self.assertEqual(result["conditions"]["channelName"], "36池")
+        self.assertEqual(result["conditions"]["last_from"], self.pool36)
+        self.assertEqual(result["conditions"]["filters"], {"学部": "高中"})
 
     def test_metric_defaults_to_order_count(self):
         result = app.run_natural_query(
@@ -344,10 +380,15 @@ class NaturalQueryTest(unittest.TestCase):
     def test_all_configured_channel_names_resolve(self):
         aliases, names_by_code = app.load_channel_aliases()
 
-        self.assertEqual(len(names_by_code), 6)
+        self.assertEqual(len(names_by_code), 8)
         self.assertEqual(names_by_code[self.yzy], "LEC内测YZY")
+        self.assertEqual(names_by_code[self.pool36], "36池")
         self.assertIn(
             ("yzy", self.yzy, "LEC内测YZY"),
+            aliases,
+        )
+        self.assertIn(
+            ("36池", self.pool36, "36池"),
             aliases,
         )
 
