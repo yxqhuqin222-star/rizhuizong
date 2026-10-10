@@ -31,6 +31,7 @@ const dailyGradeAggregateColumns = ["学部", "期次", "年级", "招生目标"
 const metricDepartments = ["小学", "初中", "高中", "自拼"];
 const gradeOrder = ["一年级", "二年级", "三年级", "四年级", "五年级", "六年级", "初一", "初二", "初三", "高一", "高二", "高三"];
 const gradeOrderIndex = new Map(gradeOrder.map((grade, index) => [grade, index]));
+const departmentOrderIndex = new Map(metricDepartments.map((department, index) => [department, index]));
 
 function fmtNumber(value) {
   return Number(value || 0).toLocaleString("zh-CN");
@@ -280,6 +281,26 @@ function uniqueOptions(rows, key) {
     .sort((a, b) => String(a).localeCompare(String(b), "zh-CN", { numeric: true }));
 }
 
+function reverseDateOptions(rows, key) {
+  return uniqueOptions(rows, key).reverse();
+}
+
+function formatDateOptionLabel(value) {
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(value);
+
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  if (
+    date.getFullYear() !== Number(year)
+    || date.getMonth() !== Number(month) - 1
+    || date.getDate() !== Number(day)
+  ) return String(value);
+
+  const weekday = new Intl.DateTimeFormat("zh-CN", { weekday: "short" }).format(date);
+  return `${year}-${month}-${day} ${weekday}`;
+}
+
 function gradeOptions(rows) {
   return uniqueOptions(rows, "年级").sort((a, b) => {
     const left = gradeOrderIndex.has(String(a)) ? gradeOrderIndex.get(String(a)) : gradeOrder.length;
@@ -288,15 +309,49 @@ function gradeOptions(rows) {
   });
 }
 
+function compareBusinessGrades(left, right) {
+  const leftGrade = gradeOrderIndex.has(String(left)) ? gradeOrderIndex.get(String(left)) : gradeOrder.length;
+  const rightGrade = gradeOrderIndex.has(String(right)) ? gradeOrderIndex.get(String(right)) : gradeOrder.length;
+  return leftGrade - rightGrade || String(left).localeCompare(String(right), "zh-CN", { numeric: true });
+}
+
+function comparePayments(left, right) {
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+  return String(left ?? "").localeCompare(String(right ?? ""), "zh-CN", { numeric: true });
+}
+
+function sortDetailRows(rows) {
+  return [...rows].sort((a, b) => {
+    const leftDepartment = departmentOrderIndex.has(String(a["学部"]))
+      ? departmentOrderIndex.get(String(a["学部"]))
+      : metricDepartments.length;
+    const rightDepartment = departmentOrderIndex.has(String(b["学部"]))
+      ? departmentOrderIndex.get(String(b["学部"]))
+      : metricDepartments.length;
+    return (
+      leftDepartment - rightDepartment
+      || String(a["学部"] ?? "").localeCompare(String(b["学部"] ?? ""), "zh-CN", { numeric: true })
+      || String(a["期次"] ?? "").localeCompare(String(b["期次"] ?? ""), "zh-CN", { numeric: true })
+      || String(a["线索渠道二级分类"] ?? "").localeCompare(String(b["线索渠道二级分类"] ?? ""), "zh-CN", { numeric: true })
+      || comparePayments(a["价体"], b["价体"])
+      || compareBusinessGrades(a["年级"], b["年级"])
+      || String(b["下单日期"] ?? "").localeCompare(String(a["下单日期"] ?? ""), "zh-CN", { numeric: true })
+    );
+  });
+}
+
 function selectedValues(id) {
   return [...document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)].map(input => input.value);
 }
 
 function selectedLabel(id, allLabel = "全部") {
-  const values = selectedValues(id);
-  if (!values.length) return allLabel;
-  if (values.length <= 2) return values.join("、");
-  return `${values.slice(0, 2).join("、")}等 ${values.length} 项`;
+  const inputs = [...document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)]
+    .map(input => ({ value: input.value, label: input.dataset.label || input.value }));
+  if (!inputs.length) return allLabel;
+  if (inputs.length <= 2) return inputs.map(input => input.label).join("、");
+  return `${inputs.slice(0, 2).map(input => input.label).join("、")}等 ${inputs.length} 项`;
 }
 
 function updateMultiSelectLabel(id, allLabel = "全部") {
@@ -383,16 +438,19 @@ function fillMultiSelect(id, values, allLabel = "全部") {
   actions.append(selectAll, clearAll);
   menu.appendChild(actions);
 
-  values.forEach(value => {
+  values.forEach(option => {
+    const value = typeof option === "object" ? option.value : option;
+    const labelText = typeof option === "object" ? option.label : option;
     const label = document.createElement("label");
     label.className = "multi-select-option";
     label.setAttribute("role", "option");
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.value = value;
+    input.value = String(value);
+    input.dataset.label = String(labelText);
     input.checked = current.has(String(value));
     const span = document.createElement("span");
-    span.textContent = value;
+    span.textContent = labelText;
     label.append(input, span);
     menu.appendChild(label);
   });
@@ -422,6 +480,15 @@ function fillMultiSelect(id, values, allLabel = "全部") {
   menu.addEventListener("click", event => event.stopPropagation());
   menu.addEventListener("change", () => {
     updateMultiSelectLabel(id, allLabel);
+    if (id === "filterOrderDate" && selectedValues(id).length) {
+      state.showDailyData = true;
+      state.dailyView = "detail";
+      state.chip = "all";
+      document.querySelectorAll(".chip").forEach(element => {
+        element.classList.toggle("active", element.dataset.chip === "all");
+      });
+      buildFilters();
+    }
     render();
   });
 
@@ -445,11 +512,16 @@ function repositionOpenMultiSelectMenus() {
 
 function buildFilters() {
   const rows = state.showDailyData && !isDailyAggregateView() ? state.dailyRows : state.allRows;
+  const dateRows = state.scope === "latest" ? state.latestDailyRows : state.dailyRows;
   fillMultiSelect("filterDepartment", uniqueOptions(rows, "学部"));
   fillMultiSelect("filterTerm", uniqueOptions(rows, "期次"), state.scope === "latest" ? "最新期次（默认）" : "全部期次");
   fillMultiSelect("filterChannel", uniqueOptions(rows, "线索渠道二级分类"));
   fillMultiSelect("filterPayment", uniqueOptions(rows, "价体").map(String));
-  fillMultiSelect("filterOrderDate", uniqueOptions(rows, "下单日期"), "全部日期");
+  fillMultiSelect(
+    "filterOrderDate",
+    reverseDateOptions(dateRows, "下单日期").map(value => ({ value, label: formatDateOptionLabel(value) })),
+    "全部日期",
+  );
   fillMultiSelect("filterGrade", gradeOptions(rows));
 }
 
@@ -635,7 +707,7 @@ function render() {
     : state.showDailyData && state.dailyView === "gradeAggregate"
       ? dailyGradeAggregateRows(baseRows)
       : null;
-  const rows = aggregate ? aggregate.rows : baseRows;
+  const rows = aggregate ? aggregate.rows : sortDetailRows(baseRows);
   state.currentRows = rows;
   renderCurrentSummary(baseRows);
   renderTableMode();
