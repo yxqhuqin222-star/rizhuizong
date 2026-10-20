@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { readFile } from "node:fs/promises";
 
 const baseUrl = process.argv[2];
 const executablePath = process.env.PLAYWRIGHT_CHROME_EXECUTABLE
@@ -140,6 +141,71 @@ try {
   }
   if (result.rowCount !== 1 || result.dailyPressed !== "true") {
     throw new Error(`daily row was not rendered: ${JSON.stringify(result)}`);
+  }
+
+  await page.click("#dailyChannelAggregateButton");
+  const channelDate = await page.evaluate(() => ({
+    title: document.querySelector("#tableTitle")?.textContent,
+    headers: [...document.querySelectorAll("#summaryHead th")].map(cell => cell.textContent),
+    row: [...document.querySelectorAll("#summaryBody tr")].map(tr => [...tr.querySelectorAll("td")].map(td => td.textContent))
+      .find(cells => cells.includes("LEC内测-1元") && cells.includes("2026-10-06")),
+    pressed: ["dailyChannelAggregateButton", "toggleDailyButton"].map(id => document.getElementById(id)?.getAttribute("aria-pressed")),
+  }));
+  if (!channelDate.title?.includes("渠道聚合 · 日数据")
+      || JSON.stringify(channelDate.headers) !== JSON.stringify(["学部", "期次", "渠道展示", "下单日期", "当日现状"])
+      || channelDate.row?.[4] !== "5"
+      || channelDate.pressed.some(value => value !== "true")) {
+    throw new Error(`channel and daily selections did not combine: ${JSON.stringify(channelDate)}`);
+  }
+
+  await page.evaluate(() => {
+    for (const id of ["filterDepartment", "filterOrderDate"]) {
+      const input = document.querySelector(`#${id} input:checked`);
+      input.checked = false;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  const grouped = await page.evaluate(() => ({
+    rows: [...document.querySelectorAll("#summaryBody tr")].map(tr => [...tr.querySelectorAll("td")].map(td => td.textContent)),
+    summary: document.getElementById("filteredSummary")?.innerText,
+  }));
+  const primaryOctober7 = grouped.rows.find(row => row[0] === "小学" && row[2] === "测试渠道-1元" && row[3] === "2026-10-07");
+  if (primaryOctober7?.[4] !== "2" || !grouped.summary?.includes("当日进量")) {
+    throw new Error(`channel/date daily totals are wrong: ${JSON.stringify(grouped)}`);
+  }
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.click("#exportCurrent");
+  const download = await downloadPromise;
+  const csv = await readFile(await download.path(), "utf8");
+  if (!csv.includes("学部,期次,渠道展示,下单日期,当日现状")
+      || !csv.includes('"小学","秋_5","测试渠道-1元","2026-10-07","2"')
+      || csv.includes("招生目标")) {
+    throw new Error(`combined-view CSV does not match daily table: ${csv.slice(0, 500)}`);
+  }
+
+  await page.click("#dailyGradeAggregateButton");
+  const threeDimensions = await page.evaluate(() => ({
+    headers: [...document.querySelectorAll("#summaryHead th")].map(cell => cell.textContent),
+    rows: [...document.querySelectorAll("#summaryBody tr")].map(tr => [...tr.querySelectorAll("td")].map(td => td.textContent)),
+    pressed: ["dailyChannelAggregateButton", "dailyGradeAggregateButton", "toggleDailyButton"]
+      .map(id => document.getElementById(id)?.getAttribute("aria-pressed")),
+  }));
+  if (JSON.stringify(threeDimensions.headers) !== JSON.stringify(["学部", "期次", "渠道展示", "年级", "下单日期", "当日现状"])
+      || threeDimensions.rows.filter(row => row[0] === "小学" && row[2] === "测试渠道-1元" && row[4] === "2026-10-07").length !== 2
+      || threeDimensions.pressed.some(value => value !== "true")) {
+    throw new Error(`three selected dimensions are wrong: ${JSON.stringify(threeDimensions)}`);
+  }
+
+  await page.click("#toggleDailyButton");
+  const cumulative = await page.evaluate(() => ({
+    headers: [...document.querySelectorAll("#summaryHead th")].map(cell => cell.textContent),
+    pressed: ["dailyChannelAggregateButton", "dailyGradeAggregateButton", "toggleDailyButton"]
+      .map(id => document.getElementById(id)?.getAttribute("aria-pressed")),
+  }));
+  if (!cumulative.headers.includes("招生目标") || cumulative.headers.includes("下单日期")
+      || JSON.stringify(cumulative.pressed) !== JSON.stringify(["true", "true", "false"])) {
+    throw new Error(`daily toggle did not preserve aggregation dimensions: ${JSON.stringify(cumulative)}`);
   }
 } finally {
   await browser.close();

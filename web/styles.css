@@ -973,15 +973,16 @@ td.num, th.num { text-align: right; }
 .daily-aggregate-table th:nth-child(n+4),
 .daily-aggregate-table td:nth-child(n+4) {
   min-width: 86px;
-  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .daily-aggregate-table th:last-child,
 .daily-aggregate-table td:last-child {
   min-width: 76px;
-  text-align: left;
 }
+
+.daily-aggregate-table th.num,
+.daily-aggregate-table td.num { text-align: right; }
 
 .daily-aggregate-table .daily-channel {
   max-width: none;
