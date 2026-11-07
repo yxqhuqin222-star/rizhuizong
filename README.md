@@ -4,7 +4,7 @@
 
 ![日追踪看板最终实现图](./docs/dashboard-implementation.png)
 
-产品需求、计算口径和钉钉播报链路以 [PRD](./docs/PRD-progress-dashboard.md) 为准，历史变更见 [CHANGELOG](./docs/CHANGELOG.md)。
+产品需求见 [PRD](./docs/PRD-progress-dashboard.md)，当前代码的指标与判断口径见 [业务规则](./docs/business-rules.md)，模块和数据流见 [架构](./docs/architecture.md)，历史变更见 [CHANGELOG](./docs/CHANGELOG.md)。
 
 ## 当前能力
 
@@ -36,7 +36,7 @@ outputs/             Summary 计算、工作簿和中间结果
 reports/             播报图生成与导出
 config/              渠道别名和本地服务配置
 tests/               自动化测试
-docs/                PRD 和变更记录
+docs/                PRD、现行业务规则、架构和变更记录
 decisions/           架构决策
 source/              原始需求证据
 rules/               项目规则

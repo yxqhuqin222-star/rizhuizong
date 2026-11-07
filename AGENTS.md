@@ -20,10 +20,20 @@
 
 - [README.md](./README.md)：运行方式、目录和常用操作。
 - [docs/PRD-progress-dashboard.md](./docs/PRD-progress-dashboard.md)：唯一产品需求和计算口径。
+- [docs/business-rules.md](./docs/business-rules.md)：当前代码中的指标公式、字段口径和业务判断；与 PRD 存在差异时标明待确认。
+- [docs/architecture.md](./docs/architecture.md)：当前核心模块、数据流和代码入口。
 - [docs/CHANGELOG.md](./docs/CHANGELOG.md)：已完成的重要变更。
 - [decisions/](./decisions/)：仍有效的架构决策。
 - [source/](./source/)：原始需求证据，只追加，不改写。
 - [rules/README.md](./rules/README.md)：数据、交付和文档规则。
+
+### 文档同步
+
+- 修改计算公式、指标口径或业务规则时，同步更新 `docs/business-rules.md`，并遵守现有 PRD、产物和测试同步要求。
+- 修改核心架构、数据流转或关键模块时，同步更新 `docs/architecture.md`。
+- 文档以实际代码为准，记录对应代码路径；不能确认的业务意图标为“待确认”，不得写成既定规则。
+- 普通 UI、文案、样式及其他无关修改，无需更新业务文档。
+- 任务完成时简要说明本次是否涉及文档更新。
 
 ## 验证标准
 
